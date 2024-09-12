@@ -1,0 +1,33 @@
+# -*- after-save-hook: (org-md-export-to-markdown); -*-
+#+options: toc:nil
+* IMDgroup-gorun
+
+This is a set of scripts for supercomputer job submission via [[https://slurm.schedmd.com/][slurm]],
+that are tailored to research that is performed in [[https://www.oimalyi.org/][Inverse Materials
+Design group]].
+
+* Installation
+
+#+begin_src bash
+  # Download the package and source dependencies
+  git clone https://git.sr.ht/~yantar92/IMDgroup-gorun
+
+  # Activate virtual environment
+  pip -m venv .venv
+  . .venv/bin/activate
+
+  # Install into the environment
+  pip install IMDgroup-gorun
+#+end_src
+
+* TODO Features
+
+* TODO Usage
+
+* TODO Citing
+
+* Contributing
+
+We welcome contributions in all forms. If you want to contribute,
+please fork this repository, make changes and send us a pull request!
+

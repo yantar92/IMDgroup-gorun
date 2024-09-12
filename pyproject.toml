@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "IMDgroup-gorun"
+version = "0.1.0"
+description = "Slurm job submission helpers for Inverse Materials Design group"
+authors = [ {name = "Ihor Radchenko", email = "yantar92@posteo.net"}
+	    {name = "Oleksandr I. Malyi", email = "oleksandrmalyi@gmail.com"}]
+readme = {file = "README.org", content-type = "text/x-org"}
+keywords = ["crystal", "materials", "science", "cluster", "VASP", "slurm", "ase"]
+classifiers = [
+	    "Development Status :: 2 - Pre-Alpha",
+            "Environment :: Console",
+            "Intended Audience :: Science/Research",
+            "License :: OSI Approved :: MIT License",
+            "Operating System :: POSIX :: Linux",
+            "Programming Language :: Python :: 3.12",
+            "Topic :: System :: Clustering",
+            "Topic :: Scientific/Engineering :: Chemistry",
+            "Topic :: Scientific/Engineering :: Information Analysis",
+            "Topic :: Scientific/Engineering :: Physics"]
+requires-python = ">=3.10"
+dependencies = [
+"ase",
+]
+
+[project.urls]
+homepage = "https://www.oimalyi.org/"
+
+[project.optional-dependencies]
+dev = ["python-lsp-server[all]"]
+
+[project.scripts]
+gorun = "IMDgroup.gorun.gorun:main"
+
+[tool.setuptools.packages.find]
+exclude = ["tests"]
+where = ["src/"]
+include = ["IMDgroup.gorun"]
+
+[tool.pylint]
+source-roots=['./src']
