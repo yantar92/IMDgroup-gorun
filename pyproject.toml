@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "IMDgroup-gorun"
 version = "0.1.0"
 description = "Slurm job submission helpers for Inverse Materials Design group"
-authors = [ {name = "Ihor Radchenko", email = "yantar92@posteo.net"}
+authors = [ {name = "Ihor Radchenko", email = "yantar92@posteo.net"},
 	    {name = "Oleksandr I. Malyi", email = "oleksandrmalyi@gmail.com"}]
 readme = {file = "README.org", content-type = "text/x-org"}
 keywords = ["crystal", "materials", "science", "cluster", "VASP", "slurm", "ase"]
@@ -22,9 +22,7 @@ classifiers = [
             "Topic :: Scientific/Engineering :: Information Analysis",
             "Topic :: Scientific/Engineering :: Physics"]
 requires-python = ">=3.10"
-dependencies = [
-"ase",
-]
+dependencies = [ "ase" ]
 
 [project.urls]
 homepage = "https://www.oimalyi.org/"
