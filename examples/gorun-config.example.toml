@@ -1,0 +1,110 @@
+[cluster.names]
+athena = ['login01.athena.cyfronet.pl']
+ares   = ['login01.ares.cyfronet.pl']
+helios = ['login01.helios.cyfronet.pl']
+
+[athena]
+queues = ['athena.plgrid-gpu-a100']
+VASP-setup = "module load nvompic/2022a FFTW/3.3.10"
+
+[athena.defaults.sbatch]
+nodes = 1
+time  = '48:00:00'
+ntasks-per-node = 16
+gres = 'gpu:8'
+cpus-per-task = 8
+mem = '128G'
+constraint = '"memfs"'
+
+[athena.plgrid-gpu-a100]
+type = 'GPU'
+max-nodes = 48
+max-cpus-per-node  = 2
+max-cores-per-cpu  = 64
+max-gpus-per-node = 8
+max-time = '48:00:00'
+max-jobs = None
+
+[athena.plgrid-gpu-a100.sbatch]
+partition = 'plgrid-gpu-a100'
+
+[ares]
+queues = ['ares.plgrid', 'ares.plgrid-testing', 'ares.plgrid-now']
+VASP-setup = "module load intel/2023b imkl/2023.2.0"
+
+[ares.defaults.sbatch]
+nodes = 4
+time  = '72:00:00'
+ntasks-per-node = 48
+
+[ares.plgrid]
+type = 'CPU'
+max-nodes = 532
+max-cpus-per-node  = 1
+max-cores-per-cpu  = 48
+max-time = '72:00:00'
+max-jobs = None
+
+[ares.plgrid.sbatch]
+partition = 'plgrid'
+
+[ares.plgrid-testing]
+type = 'CPU'
+partition = 'plgrid-testing'
+max-nodes = 2
+max-cpus-per-node  = 1
+max-cores-per-cpu  = 48
+max-time = '1:00:00'
+max-nodes = 1
+max-jobs = 1
+
+[ares.plgrid-testing.sbatch]
+partition = 'plgrid-testing'
+time = '1:00:00'
+nodes = 2
+
+[ares.plgrid-now]
+type = 'CPU'
+partition = 'plgrid-now'
+max-nodes = 1 # node limit
+max-cpus-per-node  = 1
+max-cores-per-cpu  = 48
+max-time = '12:00:00'
+max-jobs = 1
+
+[ares.plgrid-now.sbatch]
+partition = 'plgrid-now'
+time = '12:00:00'
+nodes = 1
+
+[helios]
+queues = ['helios.plgrid', 'helios.plgrid-long']
+VASP-setup = "module load GCC/13.2.0 OpenMPI/5.0.3 OpenBLAS/0.3.24 ScaLAPACK/2.2.0-fb FFTW/3.3.10"
+
+[helios.defaults.sbatch]
+nodes = 4
+time  = '72:00:00'
+ntasks-per-node = 96
+
+[helios.plgrid]
+type = 'CPU'
+partition = 'plgrid'
+nodes = 272
+max-cpus-per-node  = 2
+max-cores-per-cpu  = 96
+max-time = '72:00:00'
+max-jobs = None
+
+[helios.plgrid.sbatch]
+partition = 'plgrid'
+
+[helios.plgrid-long]
+type = 'CPU'
+max-nodes = 272
+max-cpus-per-node  = 2
+max-cores-per-cpu  = 96
+max-time = '168:00:00'
+max-jobs = None
+
+[helios.plgrid-long.sbatch]
+partition = 'plgrid-long'
