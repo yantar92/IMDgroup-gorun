@@ -74,7 +74,8 @@ def sbatch_estimate_start(script: str):
         sub.write(script)
         output = str(subprocess.check_output(
             f"sbatch --test-only {sub.name}",
-            shell=True))
+            shell=True,
+            stderr=subprocess.STDOUT))
     pattern = "sbatch: Job [0-9]+ to start at ([^ ]+) " +\
         "using ([0-9]+) processors on nodes [^ ]+ in partition [^ ]+"
     match = re.match(pattern, output)
