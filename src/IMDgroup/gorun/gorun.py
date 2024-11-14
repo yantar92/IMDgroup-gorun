@@ -78,7 +78,7 @@ def current_server(config: dict) -> str:
     """Get current server name, as named in the CONFIG.
     """
     barf_if_no_cmd('uname')
-    uname = subprocess.check_output('uname -n', shell=True).decode('utf-8')
+    uname = subprocess.check_output('uname -n', shell=True).strip()
     for server, names in config['cluster']['names'].items():
         if uname in names:
             return server
