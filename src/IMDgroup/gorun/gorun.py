@@ -100,8 +100,10 @@ def backup_current_dir(to: str) -> None:
     """Backup current directory to directory TO.
     """
     barf_if_no_cmd('rsync')
+    print(f"Backing up {os.getcwd()} ...")
     os.mkdir(to)
     subprocess.check_call(f'rsync * {to}')
+    print(f"Backing up {os.getcwd()} ... done")
 
 
 def get_user_sbatch_args(script_args: dict) -> dict[str, str]:
