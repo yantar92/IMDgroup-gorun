@@ -54,7 +54,7 @@ def sbatch_script(args: dict[str, str], script: str) -> str:
     SCRIPT is a bash script to be queued.
     Return generated script, as a string.
     """
-    sbatch_lines = [f"#SBATCH {arg}={value}" for arg, value in args]
+    sbatch_lines = [f"#SBATCH {arg}={value}" for arg, value in args.items()]
     return f"""
 #!/bin/env bash
 {"\n".join(sbatch_lines)}
@@ -62,7 +62,7 @@ def sbatch_script(args: dict[str, str], script: str) -> str:
 """
 
 
-def sbatch_estimate_start(script: str) -> (dateutil.timedelta, int) | str:
+def sbatch_estimate_start(script: str):
     """Estimate waiting time until SCRIPT starts running.
     Return a tuple of (waiting_time, nproc), as (dateutil.timedelta,
     int) object.  If SCRIPT cannot start, return error string printed
@@ -72,12 +72,12 @@ def sbatch_estimate_start(script: str) -> (dateutil.timedelta, int) | str:
     barf_if_no_cmd('date')
     with tempfile.NamedTemporaryFile('w') as sub:
         sub.write(script)
-        output = subprocess.check_output(f"sbatch --test-only {sub.name}",
-                                         shell=True)
-    match = re.match(
-      r"sbatch: Job [0-9]+ to start at ([^ ]+) " +
-      "using ([0-9]+) processors on nodes [^ ]+ in partition [^ ]+",
-      output)
+        output = str(subprocess.check_output(
+            f"sbatch --test-only {sub.name}",
+            shell=True))
+    pattern = "sbatch: Job [0-9]+ to start at ([^ ]+) " +\
+        "using ([0-9]+) processors on nodes [^ ]+ in partition [^ ]+"
+    match = re.match(pattern, output)
     if match is None:
         return output
     scheduled_time_str = match.group(1)
@@ -89,7 +89,7 @@ def sbatch_estimate_start(script: str) -> (dateutil.timedelta, int) | str:
     return (scheduled_time - now_time, ncpus)
 
 
-def get_best_script(alt_args: list(dict), script) -> str:
+def get_best_script(alt_args: list[dict], script) -> str:
     """Choose across ALT_ARGS lists, selecting the best sbatch script.
     The best script will finish running the earliest.
     """
@@ -97,7 +97,7 @@ def get_best_script(alt_args: list(dict), script) -> str:
     schedule_estimates = [sbatch_estimate_start(script) for script in scripts]
     now = dateutil.utils.today()
     best_finish_time = now
-    best_script = None
+    best_script = scripts[0]
 
     max_cpus = max(cpus for _, cpus in schedule_estimates)
 
