@@ -96,7 +96,7 @@ def get_next_run_folder() -> str:
                    if folder.split('_')[1].isdigit()]
     next_run_number = max(run_numbers) + 1 if run_numbers else 1
     return f"run_{next_run_number}_" +\
-        datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        datetime.datetime.now().strftime("%Y_%m_%dT%H_%M_%S")
 
 
 def backup_current_dir(to: str) -> None:
