@@ -4,7 +4,7 @@ ares   = ['login01.ares.cyfronet.pl']
 helios = ['login01.helios.cyfronet.pl']
 
 [athena]
-queues = ['athena.plgrid-gpu-a100']
+queues = ['plgrid-gpu-a100']
 VASP-setup = "module load nvompic/2022a FFTW/3.3.10"
 
 [athena.defaults.sbatch]
@@ -29,7 +29,7 @@ max-jobs = 99999
 partition = 'plgrid-gpu-a100'
 
 [ares]
-queues = ['ares.plgrid', 'ares.plgrid-testing', 'ares.plgrid-now']
+queues = ['plgrid', 'plgrid-testing', 'plgrid-now']
 VASP-setup = "module load intel/2023b imkl/2023.2.0"
 
 [ares.defaults.sbatch]
@@ -77,7 +77,7 @@ time = '12:00:00'
 nodes = 1
 
 [helios]
-queues = ['helios.plgrid', 'helios.plgrid-long']
+queues = ['plgrid', 'plgrid-long']
 VASP-setup = "module load GCC/13.2.0 OpenMPI/5.0.3 OpenBLAS/0.3.24 ScaLAPACK/2.2.0-fb FFTW/3.3.10"
 
 [helios.defaults.sbatch]
