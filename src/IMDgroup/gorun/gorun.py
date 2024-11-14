@@ -104,7 +104,7 @@ def backup_current_dir(to: str) -> None:
     """
     barf_if_no_cmd('rsync')
     print(f"Backing up {os.getcwd()} ...")
-    subprocess.check_call(f'rsync * {to}', shell=True)
+    subprocess.check_call(f"rsync * './{to}'", shell=True)
     print(f"Backing up {os.getcwd()} ... done")
 
 
