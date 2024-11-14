@@ -31,9 +31,11 @@ gorun 2 24:00:00
 
     argparser.add_argument(
         "number_of_nodes", help="number of nodes to request (optional)",
+        nargs="?",
         default=None)
     argparser.add_argument(
         "time_limit",
+        nargs="?",
         help="Time limit for the job in the format hh:mm:ss (optional)",
         default=None)
     argparser.add_argument(
