@@ -143,7 +143,7 @@ def main():
     if directory_queued_p(working_dir):
         print("A job is already running in this directory. " +
               "Exiting without submitting a new job.")
-        return 0
+        return 1
 
     if os.path.exists('OUTCAR') and os.path.getsize('OUTCAR') > 0:
         run_folder = get_next_run_folder()
