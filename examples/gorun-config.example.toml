@@ -23,7 +23,7 @@ max-cpus-per-node  = 2
 max-cores-per-cpu  = 64
 max-gpus-per-node = 8
 max-time = '48:00:00'
-max-jobs = None
+max-jobs = 99999
 
 [athena.plgrid-gpu-a100.sbatch]
 partition = 'plgrid-gpu-a100'
@@ -43,7 +43,7 @@ max-nodes = 532
 max-cpus-per-node  = 1
 max-cores-per-cpu  = 48
 max-time = '72:00:00'
-max-jobs = None
+max-jobs = 99999
 
 [ares.plgrid.sbatch]
 partition = 'plgrid'
@@ -93,7 +93,7 @@ nodes = 272
 max-cpus-per-node  = 2
 max-cores-per-cpu  = 96
 max-time = '72:00:00'
-max-jobs = None
+max-jobs = 99999
 
 [helios.plgrid.sbatch]
 partition = 'plgrid'
@@ -104,7 +104,7 @@ max-nodes = 272
 max-cpus-per-node  = 2
 max-cores-per-cpu  = 96
 max-time = '168:00:00'
-max-jobs = None
+max-jobs = 99999
 
 [helios.plgrid-long.sbatch]
 partition = 'plgrid-long'
