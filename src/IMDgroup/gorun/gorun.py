@@ -166,7 +166,8 @@ mpiexec {os.environ["VASP_PATH"]}/bin/vasp_ncl
     with open('sub', 'w', encoding='utf-8') as f:
         f.write(script)
 
+    print('!!!! This is a test version of new gorun script.')
     # Submit the job using sbatch.
     # os.system("sbatch sub")
     # print('Job submitted to SLURM scheduler.')
-    return 0
+    return 1
