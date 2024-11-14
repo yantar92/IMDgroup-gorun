@@ -106,7 +106,7 @@ def backup_current_dir(to: str) -> None:
     print(f"Backing up {os.getcwd()} ... done")
 
 
-def get_user_sbatch_args(script_args: dict) -> dict[str, str]:
+def get_user_sbatch_args(script_args) -> dict[str, str]:
     """Extract explicit sbtach arguments from SCRIPT_ARGS.
     """
     sbatch_args = {}
