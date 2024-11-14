@@ -144,7 +144,7 @@ def main():
         print('Running on unknown server. Please adjust the config.')
         return 1
 
-    working_dir = os.getcwd().decode('utf-8')
+    working_dir = os.getcwd()
     if directory_queued_p(working_dir):
         print("A job is already running in this directory. " +
               "Exiting without submitting a new job.")
