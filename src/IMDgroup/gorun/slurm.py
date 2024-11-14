@@ -54,7 +54,7 @@ def sbatch_script(args: dict[str, str], script: str) -> str:
     SCRIPT is a bash script to be queued.
     Return generated script, as a string.
     """
-    sbatch_lines = [f"#SBATCH {arg}={value}" for arg, value in args.items()]
+    sbatch_lines = [f"#SBATCH --{arg}={value}" for arg, value in args.items()]
     return f"""
 #!/bin/env bash
 {"\n".join(sbatch_lines)}
