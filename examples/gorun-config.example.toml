@@ -51,7 +51,6 @@ partition = 'plgrid'
 [ares.plgrid-testing]
 type = 'CPU'
 partition = 'plgrid-testing'
-max-nodes = 2
 max-cpus-per-node  = 1
 max-cores-per-cpu  = 48
 max-time = '1:00:00'
