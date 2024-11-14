@@ -71,8 +71,7 @@ def get_config(args: dict) -> dict:
     if os.path.exists(config_path):
         with open(config_path, "rb") as f:
             return tomllib.load(f)
-    raise FileNotFoundError(
-        "Cannot find config in %s", config_path)
+    raise FileNotFoundError(f"Cannot find config in {config_path}")
 
 
 def current_server(config: dict) -> str:
