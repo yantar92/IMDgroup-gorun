@@ -7,9 +7,10 @@ import datetime
 import tomllib
 import subprocess
 import glob
-from .slurm import (barf_if_no_cmd, directory_queued_p,
-                    clear_slurm_logs, get_best_script)
-from .cleanVASP import prepare_vasp_dir
+from IMDGroup.gorun.slurm import\
+    (barf_if_no_cmd, directory_queued_p,
+     clear_slurm_logs, get_best_script)
+from IMDGroup.gorun.cleanVASP import prepare_vasp_dir
 
 
 def get_args():
