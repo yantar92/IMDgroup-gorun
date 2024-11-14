@@ -79,7 +79,7 @@ def current_server(config: dict) -> str:
     """
     barf_if_no_cmd('uname')
     uname = subprocess.check_output('uname -n', shell=True)
-    for server, names in config['cluster']['names']:
+    for server, names in config['cluster']['names'].items():
         if uname in names:
             return server
     return None
