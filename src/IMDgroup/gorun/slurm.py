@@ -81,7 +81,7 @@ def sbatch_estimate_start(script: str):
                 logger.info("Unavailable queue/account combination.  Skipping")
                 return None
             print("Failed to execute sbatch in test mode:")
-            print(e.output)
+            print(e.stderr)
             print(f"Script:\n-----\n{script}\n-----\n")
             raise e
     pattern = "sbatch: Job [0-9]+ to start at ([^ ]+) " +\
