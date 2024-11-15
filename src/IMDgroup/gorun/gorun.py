@@ -7,6 +7,7 @@ import datetime
 import tomllib
 import subprocess
 import glob
+from pymatgen.io.vasp.inputs import Incar
 from IMDgroup.gorun.slurm import\
     (barf_if_no_cmd, directory_queued_p,
      clear_slurm_logs, get_best_script)
@@ -120,6 +121,13 @@ def get_user_sbatch_args(script_args) -> dict[str, str]:
     return sbatch_args
 
 
+def get_default_job_name():
+    """Generate sensible job name for a given INCAR.
+    """
+    incar = Incar.from_file('INCAR')
+    return {'job-name': incar.get('SYSTEM', 'unknown')}
+
+
 def get_sbatch_args(script_args: dict, config: dict,
                     server: str, queue: str) -> dict:
     """Return a dict of arguments for sbatch command.
@@ -127,6 +135,7 @@ def get_sbatch_args(script_args: dict, config: dict,
     """
     return config[server]['defaults']['sbatch'] |\
         config[server][queue]['sbatch'] |\
+        get_default_job_name() |\
         get_user_sbatch_args(script_args) |\
         {'partition': queue}
 
