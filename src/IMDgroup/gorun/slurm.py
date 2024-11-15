@@ -107,7 +107,8 @@ def get_best_script(alt_args: list[dict], script) -> str:
     schedule_estimates = [sbatch_estimate_start(script) for script in scripts]
 
     now = dateutil.utils.today()
-    best_finish_time = now
+    best_finish_time = now + \
+        dateutil.relativedelta.relativedelta(hours=9999999)
     best_script = scripts[0]
 
     max_cpus = max(data[1] for data in schedule_estimates
