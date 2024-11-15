@@ -117,13 +117,13 @@ def get_best_script(alt_args: list[dict], script) -> str:
             alt_args, scripts, schedule_estimates):
         if schedule_estimate is None:
             continue
-        hours, minutes, seconds = script_args.time.split(":")
+        hours, minutes, seconds = script_args['time'].split(":")
         scheduled_delta, cpus = schedule_estimate
         finish_time = now + scheduled_delta +\
             max_cpus/cpus *\
             dateutil.relativedelta.relativedelta(
                 hours=int(hours), minutes=int(minutes), seconds=int(seconds))
-        print('Candidate time (%s): %s', script_args.partition, finish_time)
+        print('Candidate time (%s): %s', script_args['partition'], finish_time)
         if finish_time < best_finish_time:
             best_finish_time = finish_time
             best_script = script
