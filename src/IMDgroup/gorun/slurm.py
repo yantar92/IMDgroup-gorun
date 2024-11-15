@@ -113,10 +113,10 @@ def get_best_script(alt_args: list[dict], script) -> str:
     max_cpus = max(data[1] for data in schedule_estimates
                    if data is not None)
 
-    for script_data, schedule_estimate in schedule_estimates:
+    for script_args, script, schedule_estimate in zip(
+            alt_args, scripts, schedule_estimates):
         if schedule_estimate is None:
             continue
-        script_args, script = script_data
         hours, minutes, seconds = script_args.time.split(":")
         scheduled_delta, cpus = schedule_estimate
         finish_time = now + scheduled_delta +\
