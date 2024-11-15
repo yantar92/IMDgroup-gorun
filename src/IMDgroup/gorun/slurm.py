@@ -123,7 +123,7 @@ def get_best_script(alt_args: list[dict], script) -> str:
             max_cpus/cpus *\
             dateutil.relativedelta.relativedelta(
                 hours=int(hours), minutes=int(minutes), seconds=int(seconds))
-        print('Candidate time (%s): %s', script_args['partition'], finish_time)
+        print(f'Candidate time ({script_args["partition"]}): {finish_time}')
         if finish_time < best_finish_time:
             best_finish_time = finish_time
             best_script = script
