@@ -93,8 +93,8 @@ def sbatch_estimate_start(script: str):
     scheduled_time_str = match.group(1)
     ncpus = match.group(2)
     scheduled_time = dateutil.parser.isoparse(scheduled_time_str)
-    now_time_str = subprocess.check_output("date +%Y-%m-%dT%H:%M:%S",
-                                           shell=True).decode('utf-8')
+    now_time_str = subprocess.check_output(
+        "date +%Y-%m-%dT%H:%M:%S", shell=True).decode('utf-8').strip()
     now_time = dateutil.parser.isoparse(now_time_str)
     return (scheduled_time - now_time, ncpus)
 
