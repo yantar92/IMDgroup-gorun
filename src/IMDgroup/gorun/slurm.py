@@ -64,8 +64,7 @@ def sbatch_script(args: dict[str, str], script: str) -> str:
 def sbatch_estimate_start(script: str):
     """Estimate waiting time until SCRIPT starts running.
     Return a tuple of (waiting_time, nproc), as (dateutil.timedelta,
-    int) object.  If SCRIPT cannot start, return error string printed
-    by sbatch.
+    int) object.  If SCRIPT cannot start, return None.
     """
     barf_if_no_cmd('sbatch')
     barf_if_no_cmd('date')
@@ -77,9 +76,14 @@ def sbatch_estimate_start(script: str):
                 f"sbatch --test-only {sub.name}",
                 shell=True).decode('utf-8')
         except subprocess.CalledProcessError as e:
+            if "Invalid account or account/partition combination specified"\
+               in e.output.decode('utf-8'):
+                logger.info("Unavailable queue/account combination.  Skipping")
+                return None
+            print("Failed to execute sbatch in test mode:")
             print(e.output)
             print(f"Script:\n-----\n{script}\n-----\n")
-            raise
+            raise e
     pattern = "sbatch: Job [0-9]+ to start at ([^ ]+) " +\
         "using ([0-9]+) processors on nodes [^ ]+ in partition [^ ]+"
     match = re.match(pattern, output)
@@ -100,6 +104,8 @@ def get_best_script(alt_args: list[dict], script) -> str:
     """
     scripts = [sbatch_script(args, script) for args in alt_args]
     schedule_estimates = [sbatch_estimate_start(script) for script in scripts]
+    # Filter out invalid scripts (due to unavailable queue)
+    schedule_estimates = [x for x in schedule_estimates if x is not None]
     now = dateutil.utils.today()
     best_finish_time = now
     best_script = scripts[0]
