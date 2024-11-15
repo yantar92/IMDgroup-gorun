@@ -91,7 +91,7 @@ def sbatch_estimate_start(script: str):
     if match is None:
         return output
     scheduled_time_str = match.group(1)
-    ncpus = match.group(2)
+    ncpus = int(match.group(2))
     scheduled_time = dateutil.parser.isoparse(scheduled_time_str)
     now_time_str = subprocess.check_output(
         "date +%Y-%m-%dT%H:%M:%S", shell=True).decode('utf-8').strip()
