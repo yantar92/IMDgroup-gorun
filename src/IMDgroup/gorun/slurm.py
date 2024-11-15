@@ -113,7 +113,7 @@ def get_best_script(alt_args: list[dict], script) -> str:
     max_cpus = max(data[1] for data in schedule_estimates
                    if data is not None)
 
-    for script_args, script, schedule_estimate in zip(
+    for script_args, script_, schedule_estimate in zip(
             alt_args, scripts, schedule_estimates):
         if schedule_estimate is None:
             continue
@@ -126,6 +126,6 @@ def get_best_script(alt_args: list[dict], script) -> str:
         print(f'Candidate time ({script_args["partition"]}): {finish_time}')
         if finish_time < best_finish_time:
             best_finish_time = finish_time
-            best_script = script
+            best_script = script_
     print(f'Best finish time: {best_finish_time}')
     return best_script
