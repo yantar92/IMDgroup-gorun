@@ -81,7 +81,7 @@ queues = ['plgrid', 'plgrid-long']
 VASP-setup = "module load GCC/13.2.0 OpenMPI/5.0.3 OpenBLAS/0.3.24 ScaLAPACK/2.2.0-fb FFTW/3.3.10"
 
 [helios.defaults.sbatch]
-nodes = 4
+nodes = 1
 time  = '72:00:00'
 ntasks-per-node = 96
 
