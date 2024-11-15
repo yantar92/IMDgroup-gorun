@@ -71,6 +71,7 @@ def sbatch_estimate_start(script: str):
     barf_if_no_cmd('date')
     with tempfile.NamedTemporaryFile('w', dir="./") as sub:
         sub.write(script)
+        sub.flush()
         try:
             output = subprocess.check_output(
                 f"sbatch --test-only {sub.name}",
