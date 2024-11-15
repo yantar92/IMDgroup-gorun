@@ -127,5 +127,5 @@ def get_best_script(alt_args: list[dict], script) -> str:
         if finish_time < best_finish_time:
             best_finish_time = finish_time
             best_script = script
-    print('Best finish time: %s', best_finish_time)
+    print(f'Best finish time: {best_finish_time}')
     return best_script
