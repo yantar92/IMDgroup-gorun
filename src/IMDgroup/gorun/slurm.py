@@ -71,10 +71,13 @@ def sbatch_estimate_start(script: str):
     barf_if_no_cmd('date')
     with tempfile.NamedTemporaryFile('w', dir="./") as sub:
         sub.write(script)
-        output = subprocess.check_output(
-            f"sbatch --test-only {sub.name}",
-            shell=True,
-            stderr=subprocess.STDOUT).decode('utf-8')
+        try:
+            output = subprocess.check_output(
+                f"sbatch --test-only {sub.name}",
+                shell=True).decode('utf-8')
+        except subprocess.CalledProcessError as e:
+            print(e.output)
+            raise
     pattern = "sbatch: Job [0-9]+ to start at ([^ ]+) " +\
         "using ([0-9]+) processors on nodes [^ ]+ in partition [^ ]+"
     match = re.match(pattern, output)
