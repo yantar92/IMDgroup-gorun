@@ -105,8 +105,7 @@ def get_best_script(alt_args: list[dict], script) -> str:
     """
     scripts = [sbatch_script(args, script) for args in alt_args]
     schedule_estimates = [sbatch_estimate_start(script) for script in scripts]
-    # Filter out invalid scripts (due to unavailable queue)
-    schedule_estimates = [x for x in schedule_estimates if x is not None]
+
     now = dateutil.utils.today()
     best_finish_time = now
     best_script = scripts[0]
@@ -114,6 +113,8 @@ def get_best_script(alt_args: list[dict], script) -> str:
     max_cpus = max(cpus for _, cpus in schedule_estimates)
 
     for script_data, schedule_estimate in schedule_estimates:
+        if schedule_estimate is None:
+            continue
         script_args, script = script_data
         hours, minutes, seconds = script_args.time.split(":")
         scheduled_delta, cpus = schedule_estimate
