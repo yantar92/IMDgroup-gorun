@@ -74,14 +74,15 @@ def sbatch_estimate_start(script: str):
         try:
             output = subprocess.check_output(
                 f"sbatch --test-only {sub.name}",
-                shell=True).decode('utf-8')
+                shell=True,
+                stderr=subprocess.STDOUT).decode('utf-8')
         except subprocess.CalledProcessError as e:
             if "Invalid account or account/partition combination specified"\
                in e.output.decode('utf-8'):
                 logger.info("Unavailable queue/account combination.  Skipping")
                 return None
             print("Failed to execute sbatch in test mode:")
-            print(e.stderr)
+            print(e.output)
             print(f"Script:\n-----\n{script}\n-----\n")
             raise e
     pattern = "sbatch: Job [0-9]+ to start at ([^ ]+) " +\
