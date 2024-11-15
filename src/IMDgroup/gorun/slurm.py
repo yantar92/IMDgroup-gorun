@@ -78,6 +78,7 @@ def sbatch_estimate_start(script: str):
                 shell=True).decode('utf-8')
         except subprocess.CalledProcessError as e:
             print(e.output)
+            print(f"Script:\n-----\n{script}\n-----\n")
             raise
     pattern = "sbatch: Job [0-9]+ to start at ([^ ]+) " +\
         "using ([0-9]+) processors on nodes [^ ]+ in partition [^ ]+"
