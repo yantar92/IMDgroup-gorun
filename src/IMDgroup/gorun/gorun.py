@@ -88,14 +88,15 @@ def current_server(config: dict) -> str:
 
 def get_next_run_folder() -> str:
     """Get the next available 'gorun_*' folder name."""
-    existing_folders = glob.glob("gorun_*")
+    prefix = 'gorun'
+    existing_folders = glob.glob(prefix + "_*")
     # Extract numeric parts from folder names
     # and find the next available number
     run_numbers = [int(folder.split('_')[1])
                    for folder in existing_folders
                    if folder.split('_')[1].isdigit()]
     next_run_number = max(run_numbers) + 1 if run_numbers else 1
-    return f"run_{next_run_number}_" +\
+    return f"{prefix}_{next_run_number}_" +\
         datetime.datetime.now().strftime("%Y_%m_%dT%H_%M_%S")
 
 
