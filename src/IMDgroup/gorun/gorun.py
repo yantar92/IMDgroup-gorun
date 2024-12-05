@@ -123,7 +123,7 @@ def backup_current_dir(to: str) -> None:
         print("Detected NEB-like input")
         for dirname in os.listdir('.'):
             if os.path.isdir(dirname) and re.match(r'[0-9]+', dirname):
-                subprocess.check_call(f"rsync {dirname} './{to}'", shell=True)
+                subprocess.check_call(f"rsync -r {dirname} './{to}'", shell=True)
     print(f"Backing up {os.getcwd()} ... done")
 
 
