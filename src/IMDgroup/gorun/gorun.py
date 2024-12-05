@@ -2,6 +2,7 @@
 """
 import os
 import sys
+import re
 import argparse
 import datetime
 import tomllib
@@ -12,6 +13,17 @@ from IMDgroup.gorun.slurm import\
     (barf_if_no_cmd, directory_queued_p,
      clear_slurm_logs, get_best_script)
 from IMDgroup.gorun.cleanVASP import prepare_vasp_dir
+
+
+def nebp(path):
+    """Return True when PATH is a NEB-like run.
+    """
+    incar_path = os.path.join(path, 'INCAR')
+    if os.path.isfile(incar_path):
+        incar = Incar.from_file(incar_path)
+        if 'IMAGES' in incar:
+            return True
+    return False
 
 
 def get_args():
@@ -107,6 +119,11 @@ def backup_current_dir(to: str) -> None:
     barf_if_no_cmd('rsync')
     print(f"Backing up {os.getcwd()} ...")
     subprocess.check_call(f"rsync * './{to}'", shell=True)
+    if nebp('.'):
+        print("Detected NEB-like input")
+        for dirname in os.listdir('.'):
+            if os.path.isdir(dirname) and re.match(r'[0-9]+', dirname):
+                subprocess.check_call(f"rsync {dirname} './{to}'", shell=True)
     print(f"Backing up {os.getcwd()} ... done")
 
 
@@ -140,6 +157,21 @@ def get_sbatch_args(script_args: dict, config: dict,
         {'partition': queue}
 
 
+def directory_contains_vasp_outputp(path):
+    """Return True when PATH contains VASP outputs.
+    """
+    outcar_path = os.path.join(path, 'OUTCAR')
+    if os.path.exists(outcar_path) and os.path.getsize(outcar_path) > 0:
+        return True
+    if nebp(path):
+        for dirname in os.listdir(path):
+            dirpath = os.path.join(path, dirname)
+            if os.path.isdir(dirpath) and re.match(r'[0-9]+', dirpath):
+                if directory_contains_vasp_outputp(dirpath):
+                    return True
+    return False
+
+
 def main():
     """Run the script."""
     barf_if_no_env("VASP_PATH")
@@ -159,12 +191,17 @@ def main():
               "Exiting without submitting a new job.")
         return 1
 
-    if os.path.exists('OUTCAR') and os.path.getsize('OUTCAR') > 0:
+    if directory_contains_vasp_outputp('.'):
         run_folder = get_next_run_folder()
         backup_current_dir(run_folder)
 
-    clear_slurm_logs()
-    prepare_vasp_dir()
+    clear_slurm_logs('.')
+    prepare_vasp_dir('.')
+    if nebp('.'):
+        for dirname in os.listdir('.'):
+            if os.path.isdir(dirname) and re.match(r'[0-9]+', dirname):
+                clear_slurm_logs(dirname)
+                prepare_vasp_dir(dirname)
 
     script = get_best_script(
         [get_sbatch_args(args, config, server, queue) for queue in queues],

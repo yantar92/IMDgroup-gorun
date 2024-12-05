@@ -8,12 +8,14 @@ import ase.io.vasp
 from ase.calculators.vasp import Vasp
 
 
-def contcar_to_poscar() -> None:
-    """When CONTCAR exists, copy it over to POSCAR.
+def contcar_to_poscar(path) -> None:
+    """When CONTCAR exists, copy it over to POSCAR in PATH.
     """
-    if os.path.exists('CONTCAR') and os.path.getsize('CONTCAR') > 0:
-        shutil.copy2('CONTCAR', 'POSCAR')
-        print("Found CONTCAR file.  Copying over to POSCAR.")
+    contcar_path = os.path.join(path, 'CONTCAR')
+    poscar_path = os.path.join(path, 'POSCAR')
+    if os.path.exists(contcar_path) and os.path.getsize(contcar_path) > 0:
+        shutil.copy2(contcar_path, poscar_path)
+        print(f"{path}: Found CONTCAR file.  Copying over to POSCAR.")
 
 
 def clean_vasp_input(file_path: str) -> None:
@@ -36,31 +38,32 @@ def clean_vasp_input(file_path: str) -> None:
         print(f'Cleaned file: {file_path}')
 
 
-def clean_vasp_inputs() -> None:
-    """Clean all the VASP input files.
+def clean_vasp_inputs(path='.') -> None:
+    """Clean all the VASP input files in PATH.
     """
     for file in ['POSCAR', 'INCAR', 'KPOINTS']:
-        if os.path.exists(file):
-            clean_vasp_input(file)
+        if os.path.exists(os.path.join(path, file)):
+            clean_vasp_input(os.path.join(path, file))
 
 
-def generate_potcar() -> None:
-    """Generate POTCAR from POSCAR file.
+def generate_potcar(path='.') -> None:
+    """Generate POTCAR from POSCAR file in PATH.
     """
-    if os.path.exists('POSCAR') and os.path.getsize('POSCAR') > 0:
-        atoms = ase.io.vasp.read_vasp(file='POSCAR')
+    poscar_path = os.path.join(path, 'POSCAR')
+    if os.path.exists(poscar_path) and os.path.getsize(poscar_path) > 0:
+        atoms = ase.io.vasp.read_vasp(file=poscar_path)
         calc_temp = Vasp(xc='PBE', setups={'base': 'recommended'})
         calc_temp.initialize(atoms)
         calc_temp.write_potcar()
-        print('Generated POTCAR.')
+        print(f'{path}: Generated POTCAR.')
 
 
-def prepare_vasp_dir() -> None:
-    """Prepare and cleanup VASP inputs in current directory.
+def prepare_vasp_dir(path='.') -> None:
+    """Prepare and cleanup VASP inputs in PATH.
     """
     # If CONTCAR exists and is non-empty, copy it to POSCAR.
-    contcar_to_poscar()
+    contcar_to_poscar(path)
     # Clean the POSCAR, INCAR, and KPOINTS files before running the job.
-    clean_vasp_inputs()
+    clean_vasp_inputs(path)
     # If POSCAR exists, initialize ASE and generate the POTCAR file.
-    generate_potcar()
+    generate_potcar(path)

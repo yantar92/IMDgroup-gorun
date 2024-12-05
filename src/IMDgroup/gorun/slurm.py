@@ -38,10 +38,11 @@ def directory_queued_p(path: str) -> bool:
                  shell=True).split())
 
 
-def clear_slurm_logs():
-    """Clear all the slurm logs in current directory.
+def clear_slurm_logs(path='.'):
+    """Clear all the slurm logs in PATH.
     """
-    for slurm_file in glob.glob("slurm-*.out"):  # Find all SLURM output files.
+    # Find all SLURM output files.
+    for slurm_file in glob.glob(os.path.join(path, "slurm-*.out")):
         try:
             os.remove(slurm_file)
             print(f"Deleted old SLURM file: {slurm_file}")
