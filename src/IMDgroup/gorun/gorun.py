@@ -166,7 +166,7 @@ def directory_contains_vasp_outputp(path):
     if nebp(path):
         for dirname in os.listdir(path):
             dirpath = os.path.join(path, dirname)
-            if os.path.isdir(dirpath) and re.match(r'[0-9]+', dirpath):
+            if os.path.isdir(dirpath) and re.match(r'[0-9]+', dirname):
                 if directory_contains_vasp_outputp(dirpath):
                     return True
     return False
