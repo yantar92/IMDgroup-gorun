@@ -198,7 +198,7 @@ def main():
     clear_slurm_logs('.')
     prepare_vasp_dir('.')
     if nebp('.'):
-        for dirname in os.listdir('.'):
+        for dirname in sorted(os.listdir('.')):
             if os.path.isdir(dirname) and re.match(r'[0-9]+', dirname):
                 clear_slurm_logs(dirname)
                 prepare_vasp_dir(dirname)
