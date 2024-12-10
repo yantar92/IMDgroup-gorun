@@ -6,6 +6,7 @@ import shutil
 import re
 import ase.io.vasp
 from ase.calculators.vasp import Vasp
+from pymatgen.io.vasp.inputs import Incar
 
 
 def contcar_to_poscar(path) -> None:
@@ -66,9 +67,17 @@ def generate_potcar(path='.') -> None:
             print(f'{path}: Updated POTCAR.')
 
 
+def check_incar(path):
+    """Check INCAR in PATH.
+    """
+    incar = Incar.from_file(os.path.join(path, 'INCAR'))
+    incar.check_params()
+
+
 def prepare_vasp_dir(path='.') -> None:
     """Prepare and cleanup VASP inputs in PATH.
     """
+    check_incar(path)
     # If CONTCAR exists and is non-empty, copy it to POSCAR.
     contcar_to_poscar(path)
     # Clean the POSCAR, INCAR, and KPOINTS files before running the job.
