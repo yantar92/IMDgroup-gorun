@@ -219,20 +219,24 @@ def main():
             "yellow"))
         return 1
 
+    if directory_converged_p('.'):
+        print(colored('VASP run already converged. Skipping', "yellow"))
+
     if directory_contains_vasp_outputp('.'):
         run_folder = get_next_run_folder()
         backup_current_dir(run_folder)
 
-    if directory_converged_p('.'):
-        print(colored('VASP run already converged. Skipping', "yellow"))
-
-    clear_slurm_logs('.')
     prepare_vasp_dir('.')
     if nebp('.'):
         for dirname in sorted(os.listdir('.')):
             if os.path.isdir(dirname) and re.match(r'[0-9]+', dirname):
-                clear_slurm_logs(dirname)
                 prepare_vasp_dir(dirname)
+
+    clear_slurm_logs('.')
+    if nebp('.'):
+        for dirname in sorted(os.listdir('.')):
+            if os.path.isdir(dirname) and re.match(r'[0-9]+', dirname):
+                clear_slurm_logs(dirname)
 
     script = get_best_script(
         [get_sbatch_args(args, config, server, queue) for queue in queues],
