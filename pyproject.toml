@@ -22,7 +22,7 @@ classifiers = [
             "Topic :: Scientific/Engineering :: Information Analysis",
             "Topic :: Scientific/Engineering :: Physics"]
 requires-python = ">=3.10"
-dependencies = [ "ase" ]
+dependencies = [ "ase", "termcolor" ]
 
 [project.urls]
 homepage = "https://www.oimalyi.org/"

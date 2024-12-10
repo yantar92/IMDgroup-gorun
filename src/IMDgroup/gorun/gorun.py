@@ -8,6 +8,7 @@ import datetime
 import tomllib
 import subprocess
 import glob
+from termcolor import colored
 from pymatgen.io.vasp.inputs import Incar
 from IMDgroup.gorun.slurm import\
     (barf_if_no_cmd, directory_queued_p,
@@ -63,7 +64,9 @@ def barf_if_no_env(variable: str) -> None:
     """Throw an error when environment VARIABLE is not set.
     """
     if variable not in os.environ:
-        print(f'{variable} is not set, while it must be in IMD Group bashrc')
+        print(colored(
+            f'{variable} is not set, while it must be in IMD Group bashrc',
+            'red'))
         sys.exit(1)
 
 
@@ -117,14 +120,13 @@ def backup_current_dir(to: str) -> None:
     """Backup current directory to directory TO.
     """
     barf_if_no_cmd('rsync')
-    print(f"Backing up {os.getcwd()} ...")
-    subprocess.check_call(f"rsync * './{to}'", shell=True)
+    print(f"Backing up {os.getcwd()}")
+    subprocess.check_call(f"rsync -q * './{to}'", shell=True)
     if nebp('.'):
         print("Detected NEB-like input")
         for dirname in os.listdir('.'):
             if os.path.isdir(dirname) and re.match(r'[0-9]+', dirname):
-                subprocess.check_call(f"rsync -r {dirname} './{to}'", shell=True)
-    print(f"Backing up {os.getcwd()} ... done")
+                subprocess.check_call(f"rsync -qr {dirname} './{to}'", shell=True)
 
 
 def get_user_sbatch_args(script_args) -> dict[str, str]:
@@ -182,13 +184,17 @@ def main():
     queues = config[server]['queues']
 
     if server is None:
-        print('Running on unknown server. Please adjust the config.')
+        print(colored(
+            'Running on unknown server. Please adjust the config.',
+            "red"))
         return 1
 
     working_dir = os.getcwd()
     if directory_queued_p(working_dir):
-        print("A job is already running in this directory. " +
-              "Exiting without submitting a new job.")
+        print(colored(
+            "A job is already running in this directory. "
+            "Exiting without submitting a new job.",
+            "yellow"))
         return 1
 
     if directory_contains_vasp_outputp('.'):
@@ -215,5 +221,5 @@ mpiexec {os.environ["VASP_PATH"]}/bin/vasp_ncl
 
     # Submit the job using sbatch.
     os.system("sbatch sub")
-    print('Job submitted to SLURM scheduler.')
+    print(colored('Job submitted to SLURM scheduler.', "green"))
     return 0
