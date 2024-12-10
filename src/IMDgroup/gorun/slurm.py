@@ -35,7 +35,7 @@ def directory_queued_p(path: str) -> bool:
     barf_if_no_cmd('squeue')
     return bool(path in subprocess.check_output
                 ("squeue -u $USER -o %Z | tail -n +2",
-                 shell=True).split())
+                 shell=True).decode('utf-8')..split())
 
 
 def clear_slurm_logs(path='.'):
