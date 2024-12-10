@@ -54,8 +54,16 @@ def generate_potcar(path='.') -> None:
         atoms = ase.io.vasp.read_vasp(file=poscar_path)
         calc_temp = Vasp(xc='PBE', setups={'base': 'recommended'})
         calc_temp.initialize(atoms)
+        potcar_path = os.path.join(path, 'POTCAR')
+        size_before = 0
+        if os.path.isfile(potcar_path):
+            size_before = os.path.getsize(potcar_path)
         calc_temp.write_potcar()
-        print(f'{path}: Generated POTCAR.')
+        size_after = os.path.getsize(potcar_path)
+        if size_before == 0:
+            print(f'{path}: Generated POTCAR.')
+        elif size_after != size_before:
+            print(f'{path}: Updated POTCAR.')
 
 
 def prepare_vasp_dir(path='.') -> None:
