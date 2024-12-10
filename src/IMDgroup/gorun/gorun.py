@@ -3,6 +3,7 @@
 import os
 import sys
 import re
+import warnings
 import argparse
 import datetime
 import tomllib
@@ -15,6 +16,17 @@ from IMDgroup.gorun.slurm import\
     (barf_if_no_cmd, directory_queued_p,
      clear_slurm_logs, get_best_script)
 from IMDgroup.gorun.cleanVASP import prepare_vasp_dir
+
+
+def _showwarning(message, category, _filename, _lineno, file=None, _line=None):
+    """Print warning in nicer way."""
+    output = colored(
+        f"{category.__name__}: ", "yellow", attrs=['bold']) +\
+        f"{message}"
+    print(output, file=file or sys.stderr)
+
+
+warnings.showwarning = _showwarning
 
 
 def nebp(path):
