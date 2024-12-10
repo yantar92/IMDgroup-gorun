@@ -10,6 +10,7 @@ import subprocess
 import glob
 from termcolor import colored
 from pymatgen.io.vasp.inputs import Incar
+from pymatgen.io.vasp.outputs import Vasprun
 from IMDgroup.gorun.slurm import\
     (barf_if_no_cmd, directory_queued_p,
      clear_slurm_logs, get_best_script)
@@ -174,6 +175,15 @@ def directory_contains_vasp_outputp(path):
     return False
 
 
+def directory_converged_p(path):
+    """Return True when PATH contains converged VASP output.
+    """
+    if directory_contains_vasp_outputp(path):
+        run = Vasprun(os.path.join(path, 'vasprun.xml'))
+        return run.converged
+    return False
+
+
 def main():
     """Run the script."""
     barf_if_no_env("VASP_PATH")
@@ -200,6 +210,9 @@ def main():
     if directory_contains_vasp_outputp('.'):
         run_folder = get_next_run_folder()
         backup_current_dir(run_folder)
+
+    if directory_converged_p('.'):
+        print(colored('VASP run already converged. Skipping', "yellow"))
 
     clear_slurm_logs('.')
     prepare_vasp_dir('.')
