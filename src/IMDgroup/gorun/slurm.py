@@ -107,6 +107,10 @@ def get_best_script(alt_args: list[dict], script) -> str:
     scripts = [sbatch_script(args, script) for args in alt_args]
     schedule_estimates = [sbatch_estimate_start(script) for script in scripts]
 
+    if all(data is None for data in schedule_estimates):
+        raise OSError(
+            "No single queue is available for running.  Check grant limits")
+
     now = dateutil.utils.today()
     best_finish_time = now + \
         dateutil.relativedelta.relativedelta(hours=9999999)
