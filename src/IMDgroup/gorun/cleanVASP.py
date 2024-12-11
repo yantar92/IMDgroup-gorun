@@ -60,11 +60,13 @@ def generate_potcar(path='.') -> None:
         if os.path.isfile(potcar_path):
             size_before = os.path.getsize(potcar_path)
         calc_temp.write_potcar()
-        size_after = os.path.getsize(potcar_path)
-        if size_before == 0:
-            print(f'{path}: Generated POTCAR.')
-        elif size_after != size_before:
-            print(f'{path}: Updated POTCAR.')
+        # Sometimes, for initial/final NEB inputs, POTCAR is not written
+        if os.path.isfile(potcar_path):
+            size_after = os.path.getsize(potcar_path)
+            if size_before == 0:
+                print(f'{path}: Generated POTCAR.')
+            elif size_after != size_before:
+                print(f'{path}: Updated POTCAR.')
 
 
 def check_incar(path):
