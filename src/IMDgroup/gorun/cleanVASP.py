@@ -70,8 +70,10 @@ def generate_potcar(path='.') -> None:
 def check_incar(path):
     """Check INCAR in PATH.
     """
-    incar = Incar.from_file(os.path.join(path, 'INCAR'))
-    incar.check_params()
+    incar_path = os.path.join(path, 'INCAR')
+    if os.path.isfile(incar_path):
+        incar = Incar.from_file(incar_path)
+        incar.check_params()
 
 
 def prepare_vasp_dir(path='.') -> None:
