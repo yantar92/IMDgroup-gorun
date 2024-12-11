@@ -10,6 +10,7 @@ import tomllib
 import subprocess
 import glob
 from termcolor import colored
+from xml.etree.ElementTree import ParseError
 from pymatgen.io.vasp.inputs import Incar
 from pymatgen.io.vasp.outputs import Vasprun
 from IMDgroup.gorun.slurm import\
@@ -198,8 +199,11 @@ def directory_converged_p(path):
                     if not directory_converged_p(dirpath):
                         return False
         else:
-            run = Vasprun(os.path.join(path, 'vasprun.xml'))
-            if not run.converged:
+            try:
+                run = Vasprun(os.path.join(path, 'vasprun.xml'))
+                if not run.converged:
+                    return False
+            except (ParseError, FileNotFoundError):
                 return False
         return True
     return False
