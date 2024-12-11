@@ -191,8 +191,17 @@ def directory_converged_p(path):
     """Return True when PATH contains converged VASP output.
     """
     if directory_contains_vasp_outputp(path):
-        run = Vasprun(os.path.join(path, 'vasprun.xml'))
-        return run.converged
+        if nebp(path):
+            for dirname in os.listdir(path):
+                dirpath = os.path.join(path, dirname)
+                if os.path.isdir(dirpath) and re.match(r'[0-9]+', dirname):
+                    if not directory_converged_p(dirpath):
+                        return False
+        else:
+            run = Vasprun(os.path.join(path, 'vasprun.xml'))
+            if not run.converged:
+                return False
+        return True
     return False
 
 
