@@ -88,7 +88,7 @@ ntasks-per-node = 96
 [helios.plgrid]
 type = 'CPU'
 partition = 'plgrid'
-nodes = 272
+max-nodes = 272
 max-cpus-per-node  = 2
 max-cores-per-cpu  = 96
 max-time = '72:00:00'
