@@ -2,6 +2,7 @@
 athena = ['login01.athena.cyfronet.pl']
 ares   = ['login01.ares.cyfronet.pl']
 helios = ['login01.helios.cyfronet.pl']
+lumi = ['uan01']
 
 [athena]
 queues = ['plgrid-gpu-a100']
@@ -107,3 +108,37 @@ max-jobs = 99999
 
 [helios.plgrid-long.sbatch]
 partition = 'plgrid-long'
+
+# https://docs.lumi-supercomputer.eu/runjobs/scheduled-jobs/partitions/
+[lumi]
+queues = ['standard', 'small']
+
+[lumi.standard]
+type = 'CPU'
+partition = 'standard'
+max-nodes = 512
+max-cpus-per-node  = 2
+max-cores-per-cpu  = 128
+max-time = '48:00:00'
+max-jobs = 120
+
+[lumi.defaults.sbatch]
+nodes = 1
+time  = '48:00:00'
+ntasks-per-node = 128
+
+[lumi.standard.sbatch]
+partition = 'standard'
+
+[lumi.small]
+type = 'CPU'
+partition = 'small'
+max-nodes = 4
+max-cpus-per-node  = 2
+max-cores-per-cpu  = 128
+max-time = '72:00:00'
+max-jobs = 220
+
+[lumi.small.sbatch]
+partition = 'small'
+time = '72:00:00'
