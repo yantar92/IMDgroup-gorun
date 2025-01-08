@@ -234,6 +234,7 @@ def main():
 
     if directory_converged_p('.'):
         print(colored('VASP run already converged. Skipping', "yellow"))
+        return 1
 
     if directory_contains_vasp_outputp('.'):
         run_folder = get_next_run_folder()
