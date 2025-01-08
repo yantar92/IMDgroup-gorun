@@ -233,7 +233,10 @@ def main():
         return 1
 
     if directory_converged_p('.'):
-        print(colored('VASP run already converged. Skipping', "yellow"))
+        print(colored(
+            'VASP run already converged. '
+            'Exiting without submitting a new job.',
+            "yellow"))
         return 1
 
     if directory_contains_vasp_outputp('.'):
