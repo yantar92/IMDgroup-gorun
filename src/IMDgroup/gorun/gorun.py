@@ -260,7 +260,7 @@ def main():
         f"""
 {config[server]['VASP-setup']}
 
-mpiexec {os.environ["VASP_PATH"]}/bin/vasp_ncl
+{config[server].get('mpiexec', 'mpiexec')} {os.environ["VASP_PATH"]}/bin/vasp_ncl
         """)
     with open('sub', 'w', encoding='utf-8') as f:
         f.write(script)

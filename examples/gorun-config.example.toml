@@ -113,6 +113,8 @@ partition = 'plgrid-long'
 [lumi]
 queues = ['standard', 'small']
 VASP-setup = "export EBU_USER_PREFIX=/projappl/project_465001654/EasyBuild\nmodule load LUMI/24.03 partition/C PrgEnv-gnu cray-fftw/3.3.10.7 OpenBLAS/0.3.24-cpeGNU-24.03  ScaLAPACK/4.2-cpeGNU-24.03-amd"
+# https://docs.lumi-supercomputer.eu/runjobs/scheduled-jobs/lumic-job/
+mpiexec = "srun"
 
 [lumi.standard]
 type = 'CPU'
