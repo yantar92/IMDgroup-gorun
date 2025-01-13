@@ -112,6 +112,8 @@ partition = 'plgrid-long'
 # https://docs.lumi-supercomputer.eu/runjobs/scheduled-jobs/partitions/
 [lumi]
 queues = ['standard', 'small']
+VASP-setup = "export EBU_USER_PREFIX=<<IMDGroup-lumi()>>/dist/EasyBuild
+module load LUMI/24.03 partition/C PrgEnv-gnu cray-fftw/3.3.10.7 OpenBLAS/0.3.24-cpeGNU-24.03  ScaLAPACK/4.2-cpeGNU-24.03-amd"
 
 [lumi.standard]
 type = 'CPU'
@@ -126,6 +128,7 @@ max-jobs = 120
 nodes = 1
 time  = '48:00:00'
 ntasks-per-node = 128
+account = 'project_465001654'
 
 [lumi.standard.sbatch]
 partition = 'standard'
