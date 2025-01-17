@@ -4,6 +4,7 @@
 import os
 import shutil
 import re
+import warnings
 import ase.io.vasp
 from ase.calculators.vasp import Vasp
 from pymatgen.io.vasp.inputs import Incar
@@ -17,6 +18,29 @@ def contcar_to_poscar(path) -> None:
     if os.path.exists(contcar_path) and os.path.getsize(contcar_path) > 0:
         shutil.copy2(contcar_path, poscar_path)
         print(f"{path}: Found CONTCAR file.  Copying over to POSCAR.")
+
+
+def put_vdw_kernel(path) -> None:
+    """Copy vdw_kernel.bindat from $VASP_PATH.
+    1. Try $VASP_PATH/vdw_kernel.bindat
+    2. Try $VASP_PATH/testsuite/tests/CuC_vdW/vdw_kernel.bindat
+    3. If not present, display a warning.
+    """
+    vdw_path_1 = os.path.join(
+        os.environ['VASP_PATH'], 'vdw_kernel.bindat')
+    vdw_path_2 = os.path.join(
+        os.environ['VASP_PATH'], 'testsuite', 'tests',
+        'CuC_vdW', 'vdw_kernel.bindat')
+    vdw_target = os.path.join(path, 'vdw_kernel.bindat')
+    for vdw_path in [vdw_path_1, vdw_path_2]:
+        if os.path.exists(vdw_path) and os.path.getsize(vdw_path) > 0:
+            shutil.copy2(vdw_path, vdw_target)
+            print(f"{path}: Copied vdw_kernel.bindat from {vdw_path}")
+            return
+    warnings.warn(
+        "Cannot find vdw_kernel.bindat.  "
+        "VASP.6.4.2 and older may take hours to compute the kernel."
+    )
 
 
 def clean_vasp_input(file_path: str) -> None:
@@ -88,3 +112,5 @@ def prepare_vasp_dir(path='.') -> None:
     clean_vasp_inputs(path)
     # If POSCAR exists, initialize ASE and generate the POTCAR file.
     generate_potcar(path)
+    # Copy over vdw kernel
+    put_vdw_kernel(path)

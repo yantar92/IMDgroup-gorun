@@ -48,9 +48,10 @@ def get_args():
             description="""Queue VASP run for current directory
 Do nothing when VASP run is already queued for the current directory.
 Also,
-1. If CONTCAR is present, copy it over to POSCAR
-2. Generate POTCAR file
-3. Backup old VASP files and slurm logs
+1. Make sure that vdw_kernel.bindat is copied over from VASP source dir
+2. If CONTCAR is present, copy it over to POSCAR
+3. Generate POTCAR file
+4. Backup old VASP files and slurm logs
 
 Slurm script will be saved under name 'sub'.""",
             epilog="""Example:
