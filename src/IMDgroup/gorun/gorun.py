@@ -71,6 +71,11 @@ gorun 2 24:00:00
         help="Path to configuration file " +
         "(default: $IMDGroup/dist/etc/gorun.toml)",
         default=None)
+    argparser.add_argument(
+        "--queue",
+        help="Queue to be used (default: find best)",
+        type=str,
+        default=None)
     return argparser.parse_args()
 
 
@@ -217,6 +222,8 @@ def main():
     config = get_config(args)
     server = current_server(config)
     queues = config[server]['queues']
+    if args.queue is not None:
+        queues = [args.queue]
 
     if server is None:
         print(colored(
