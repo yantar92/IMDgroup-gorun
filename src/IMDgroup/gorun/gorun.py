@@ -113,6 +113,8 @@ def get_config(args: dict) -> dict:
 def current_server(config: dict) -> str:
     """Get current server name, as named in the CONFIG.
     """
+    if "CLUSTER_NAME" in os.environ:
+        return os.environ['CLUSTER_NAME']
     barf_if_no_cmd('uname')
     uname = subprocess.check_output(
         'uname -n', shell=True).decode('utf-8').strip()
