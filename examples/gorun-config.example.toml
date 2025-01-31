@@ -81,7 +81,7 @@ nodes = 1
 queues = ['plgrid', 'plgrid-long']
 VASP-setup = "module load GCC/13.2.0 OpenMPI/5.0.3 OpenBLAS/0.3.24 ScaLAPACK/2.2.0-fb FFTW/3.3.10"
 # https://docs.cyfronet.pl/display/~plgpawlik/Helios#Helios-Samplejobscripts
-shebang = '/bin/bash -l'
+shebang = '#!/bin/bash -l'
 
 [helios.defaults.sbatch]
 nodes = 1
