@@ -50,13 +50,13 @@ def clear_slurm_logs(path='.'):
             print(f"Error deleting SLURM file {slurm_file}: {e}")
 
 
-def sbatch_script(args: dict[str, str], script: str) -> str:
-    """Generate sbatch SCRIPT passing ARGS to sbatch.
+def sbatch_script(shebang, args: dict[str, str], script: str) -> str:
+    """Generate sbatch SCRIPT using SHEBANG, passing ARGS to sbatch.
     SCRIPT is a bash script to be queued.
     Return generated script, as a string.
     """
     sbatch_lines = [f'#SBATCH --{arg}="{value}"' for arg, value in args.items()]
-    return f"""#!//usr/bin/env bash
+    return f"""#!{shebang}
 {"\n".join(sbatch_lines)}
 {script}
 """
@@ -100,11 +100,16 @@ def sbatch_estimate_start(script: str):
     return (scheduled_time - now_time, ncpus)
 
 
-def get_best_script(alt_args: list[dict], script) -> str:
+def get_best_script(
+        alt_args: list[dict],
+        script,
+        shebang: str = "#!/usr/bin/env bash",
+) -> str:
     """Choose across ALT_ARGS lists, selecting the best sbatch script.
     The best script will finish running the earliest.
+    SHEBANG is shebang line to be used.
     """
-    scripts = [sbatch_script(args, script) for args in alt_args]
+    scripts = [sbatch_script(shebang, args, script) for args in alt_args]
     schedule_estimates = [sbatch_estimate_start(script) for script in scripts]
 
     if all(data is None for data in schedule_estimates):
