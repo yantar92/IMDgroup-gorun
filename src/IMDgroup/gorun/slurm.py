@@ -56,7 +56,7 @@ def sbatch_script(shebang, args: dict[str, str], script: str) -> str:
     Return generated script, as a string.
     """
     sbatch_lines = [f'#SBATCH --{arg}="{value}"' for arg, value in args.items()]
-    return f"""#!{shebang}
+    return f"""{shebang}
 {"\n".join(sbatch_lines)}
 {script}
 """
