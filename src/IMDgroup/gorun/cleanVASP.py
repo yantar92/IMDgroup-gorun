@@ -94,7 +94,7 @@ def generate_potcar(path='.') -> None:
             poscar_path = p
             break
     if poscar_path is not None:
-        atoms = ase.io.vasp.read_vasp(filename=poscar_path)
+        atoms = ase.io.vasp.read_vasp(file=poscar_path)
         calc_temp = Vasp(xc='PBE', setups={'base': 'recommended'})
         calc_temp.initialize(atoms)
         potcar_path = os.path.join(path, 'POTCAR')
