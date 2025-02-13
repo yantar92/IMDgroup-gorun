@@ -10,6 +10,17 @@ from ase.calculators.vasp import Vasp
 from pymatgen.io.vasp.inputs import Incar
 
 
+def nebp(path):
+    """Return True when PATH is a NEB-like run.
+    """
+    incar_path = os.path.join(path, 'INCAR')
+    if os.path.isfile(incar_path):
+        incar = Incar.from_file(incar_path)
+        if 'IMAGES' in incar:
+            return True
+    return False
+
+
 def contcar_to_poscar(path) -> None:
     """When CONTCAR exists, copy it over to POSCAR in PATH.
     """
@@ -74,9 +85,16 @@ def clean_vasp_inputs(path='.') -> None:
 def generate_potcar(path='.') -> None:
     """Generate POTCAR from POSCAR file in PATH.
     """
-    poscar_path = os.path.join(path, 'POSCAR')
-    if os.path.exists(poscar_path) and os.path.getsize(poscar_path) > 0:
-        atoms = ase.io.vasp.read_vasp(file=poscar_path)
+    poscar_paths = [os.path.join(path, 'POSCAR')]
+    if nebp(path):
+        poscar_paths += [os.path.join(path, "00", "POSCAR")]
+    poscar_path = None
+    for p in poscar_paths:
+        if os.path.exists(p) and os.path.getsize(p) > 0:
+            poscar_path = p
+            break
+    if poscar_path is not None:
+        atoms = ase.io.vasp.read_vasp(filename=poscar_path)
         calc_temp = Vasp(xc='PBE', setups={'base': 'recommended'})
         calc_temp.initialize(atoms)
         potcar_path = os.path.join(path, 'POTCAR')

@@ -16,7 +16,7 @@ from pymatgen.io.vasp.outputs import Vasprun
 from IMDgroup.gorun.slurm import\
     (barf_if_no_cmd, directory_queued_p,
      clear_slurm_logs, get_best_script)
-from IMDgroup.gorun.cleanVASP import prepare_vasp_dir
+from IMDgroup.gorun.cleanVASP import prepare_vasp_dir, nebp
 
 
 def _showwarning(message, category, _filename, _lineno, file=None, _line=None):
@@ -28,17 +28,6 @@ def _showwarning(message, category, _filename, _lineno, file=None, _line=None):
 
 
 warnings.showwarning = _showwarning
-
-
-def nebp(path):
-    """Return True when PATH is a NEB-like run.
-    """
-    incar_path = os.path.join(path, 'INCAR')
-    if os.path.isfile(incar_path):
-        incar = Incar.from_file(incar_path)
-        if 'IMAGES' in incar:
-            return True
-    return False
 
 
 def get_args():
