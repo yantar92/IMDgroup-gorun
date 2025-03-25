@@ -66,6 +66,14 @@ gorun 2 24:00:00
         help="Queue to be used (default: find best)",
         type=str,
         default=None)
+    argparser.add_argument(
+        "--no_vasp_config",
+        help="Whether to configure environment for VASP",
+        action="store_true")
+    argparser.add_argument(
+        "--local",
+        help="Whether to run locally (do not use sbatch)",
+        action="store_true")
     return argparser.parse_args()
 
 
@@ -258,7 +266,7 @@ def main():
     script = get_best_script(
         [get_sbatch_args(args, config, server, queue) for queue in queues],
         f"""
-{config[server]['VASP-setup']}
+{config[server]['VASP-setup'] if not args.no_vasp_config else ""}
 
 {config[server].get('mpiexec', 'mpiexec')} {os.environ["VASP_PATH"]}/bin/vasp_ncl
         """,
@@ -267,6 +275,10 @@ def main():
         f.write(script)
 
     # Submit the job using sbatch.
-    os.system("sbatch sub")
-    print(colored('Job submitted to SLURM scheduler.', "green"))
+    if args.local:
+        os.system("bash sub")
+        print(colored('Running job locally...', "green"))
+    else:
+        os.system("sbatch sub")
+        print(colored('Job submitted to SLURM scheduler.', "green"))
     return 0
