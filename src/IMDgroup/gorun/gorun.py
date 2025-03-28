@@ -247,6 +247,13 @@ def main():
             "yellow"))
         return 1
 
+    if not os.path.isfile('INCAR'):
+        print(colored(
+            'No INCAR found in current dir. '
+            'Exiting without submitting a new job.',
+            "yellow"))
+        return 1
+
     if directory_contains_vasp_outputp('.'):
         run_folder = get_next_run_folder()
         backup_current_dir(run_folder)
