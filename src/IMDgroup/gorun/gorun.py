@@ -240,16 +240,16 @@ def main():
             "yellow"))
         return 1
 
-    if directory_converged_p('.'):
+    if not os.path.isfile('INCAR'):
         print(colored(
-            'VASP run already converged. '
+            'No INCAR found in current dir. '
             'Exiting without submitting a new job.',
             "yellow"))
         return 1
 
-    if not os.path.isfile('INCAR'):
+    if directory_converged_p('.'):
         print(colored(
-            'No INCAR found in current dir. '
+            'VASP run already converged. '
             'Exiting without submitting a new job.',
             "yellow"))
         return 1
