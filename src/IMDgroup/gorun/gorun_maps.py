@@ -104,6 +104,10 @@ def main():
             shutil.rmtree(test_dir)
         return 1
 
+    # Cleanup maps lock files
+    Path("pollmach_is_running").unlink(missing_ok=True)
+    Path("maps_is_running").unlink(missing_ok=True)
+
     script = get_best_script(
         [get_sbatch_args(args, config, server, queue) for queue in queues],
         f"""
