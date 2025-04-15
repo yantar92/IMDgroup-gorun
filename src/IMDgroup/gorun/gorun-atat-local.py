@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+import argparse
+import subprocess
+from pathlib import Path
+from IMDgroup.pymatgen.cli.imdg_derive import atat, scf
+from IMDgroup.pymatgen.core.structure import structure_is_valid2
+from pymatgen.io.vasp.outputs import Vasprun
+
+
+def get_args():
+    parser = argparse.ArgumentParser(
+        description="Run VASP in current dir, according to str.out and parent dir.")
+
+    # Required arguments
+    parser.add_argument(
+        "--kpoints",
+        required=True,
+        help="Kpoint density")
+    parser.add_argument(
+        "vasp_command",
+        help="VASP command to run",
+        nargs=argparse.REMAINDER)
+    args = parser.parse_args()
+    return args
+
+
+def run_vasp(vasp_command, directory):
+    """Run VASP_COMMAND in DIRECTORY.
+    Return Vasprun object if VASP succeeds and converges and False
+    otherwise.
+    """
+    with open(Path(directory) / 'vasp.out', 'a') as f:
+        print(f"Running {vasp_command} in {directory}")
+        result = subprocess.run(
+            vasp_command,
+            cwd=directory,
+            check=False,
+            stdout=f,
+            stderr=subprocess.STDOUT)
+    try:
+        run = Vasprun(Path(directory) / "vasprun.xml")
+    except (ValueError, FileNotFoundError):
+        run = None
+    if result.returncode != 0 or run is None or not run.converged:
+        Path('error').touch()
+        return False
+    return run
+
+
+def main():
+    args = get_args()
+    # Generate VASP input
+    args.atat_structure = "str.out"
+    args.input_directory = "../"
+    inputset_data = atat(args)
+    assert len(inputset_data['inputsets']) == 1
+    inputset = inputset_data['inputsets'][0]
+    if not structure_is_valid2(inputset.structure):
+        Path('error').touch()
+        print("str.out has atoms too close to each other")
+        return 1
+    inputset.write_input(output_dir="ATAT")
+
+    # Run VASP
+    if not run_vasp(args.vasp_command, "ATAT"):
+        return 1
+
+    # Create SCF input
+    args.input_directory = "ATAT"
+    inputset_data = scf(args)
+    assert len(inputset_data['inputsets']) == 1
+    inputset = inputset_data['inputsets'][0]
+    inputset.write_input(output_dir="ATAT.SCF")
+
+    # Run VASP
+    run = run_vasp(args.vasp_command, "ATAT.SCF")
+    if not run:
+        return 1
+
+    Path('energy').write_text(f"{float(run.final_energy)}\n")
+    return 0

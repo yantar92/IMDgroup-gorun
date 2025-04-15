@@ -22,7 +22,7 @@ classifiers = [
             "Topic :: Scientific/Engineering :: Information Analysis",
             "Topic :: Scientific/Engineering :: Physics"]
 requires-python = ">=3.10"
-dependencies = [ "ase", "termcolor" ]
+dependencies = [ "ase", "termcolor", "IMDgroup-pymatgen"]
 
 [project.urls]
 homepage = "https://www.oimalyi.org/"
@@ -32,6 +32,7 @@ dev = ["python-lsp-server[all]"]
 
 [project.scripts]
 gorun = "IMDgroup.gorun.gorun:main"
+gorun-atat-local = "IMDgroup.gorun.gorun-atat-local:main"
 
 [tool.setuptools.packages.find]
 exclude = ["tests"]
