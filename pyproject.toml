@@ -33,6 +33,7 @@ dev = ["python-lsp-server[all]"]
 [project.scripts]
 gorun = "IMDgroup.gorun.gorun:main"
 gorun-atat-local = "IMDgroup.gorun.gorun-atat-local:main"
+gorun-maps = "IMDgroup.gorun.gorun-maps:main"
 
 [tool.setuptools.packages.find]
 exclude = ["tests"]
