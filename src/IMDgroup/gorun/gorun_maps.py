@@ -24,8 +24,7 @@ def get_args():
         """
     )
     argparser.add_argument(
-        "time_limit",
-        nargs="?",
+        "--time_limit",
         help="Time limit for the job in the format hh:mm:ss (optional)",
         default=None
     )
