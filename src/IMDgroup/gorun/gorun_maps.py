@@ -62,7 +62,7 @@ def main():
     """
     barf_if_no_env("VASP_PATH")
     barf_if_no_cmd("maps")
-    barf_if_no_cmd("pollmatch")
+    barf_if_no_cmd("pollmach")
     args = get_args()
     config = get_config(args)
     server = current_server(config)
@@ -112,7 +112,7 @@ def main():
 
 maps {args.maps_args.join(' ')} &
 sleep 5
-pollmatch gorun-atat-local --kpoints={args.kpoints} --local --no_vasp_config
+pollmach gorun-atat-local --kpoints={args.kpoints} --local --no_vasp_config
 """,
         config[server].get('shebang', "#!/usr/bin/bash"))
     with open('sub', 'w', encoding='utf-8') as f:
