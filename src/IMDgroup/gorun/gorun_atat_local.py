@@ -10,7 +10,7 @@ from pathlib import Path
 from IMDgroup.pymatgen.cli.imdg_derive import atat, scf
 from IMDgroup.pymatgen.core.structure import structure_is_valid2
 from pymatgen.io.vasp.outputs import Vasprun
-
+from xml.etree.ElementTree import ParseError
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -44,7 +44,7 @@ def run_vasp(vasp_command, directory):
             stderr=subprocess.STDOUT)
     try:
         run = Vasprun(Path(directory) / "vasprun.xml")
-    except (ValueError, FileNotFoundError):
+    except (ValueError, FileNotFoundError, ParseError):
         run = None
     if result.returncode != 0 or run is None or not run.converged:
         Path('error').touch()
