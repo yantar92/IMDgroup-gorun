@@ -32,13 +32,18 @@ dev = ["python-lsp-server[all]"]
 
 [project.scripts]
 gorun = "IMDgroup.gorun.gorun:main"
-gorun-atat-local = "IMDgroup.gorun.gorun-atat-local:main"
-gorun-maps = "IMDgroup.gorun.gorun-maps:main"
+gorun-atat-local = "IMDgroup.gorun.gorun_atat_local:main"
+gorun-maps = "IMDgroup.gorun.gorun_maps:main"
 
 [tool.setuptools.packages.find]
 exclude = ["tests"]
 where = ["src/"]
-include = ["IMDgroup.gorun", "IMDGroup"]
+include = [
+	"IMDgroup.gorun_maps",
+        "IMDgroup.gorun_atat_local",
+        "IMDgroup.gorun",
+        "IMDgroup.sbatch",
+        "IMDGroup"]
 
 [tool.pylint]
 source-roots=['./src']
