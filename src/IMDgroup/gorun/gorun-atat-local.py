@@ -1,4 +1,9 @@
-#!/usr/bin/env python3
+"""Run VASP according to ATAT-generated structure.
+Use VASP configuration from parent directory as reference.
+Run (1) parent directory configuration; (2) SCF run; (3) Write energy
+or error files.
+"""
+
 import argparse
 import subprocess
 from pathlib import Path
