@@ -115,7 +115,7 @@ def main():
 
 maps {' '.join(args.maps_args)} &
 sleep 5
-pollmach gorun-atat-local --kpoints={args.kpoints} --local --no_vasp_config
+pollmach gorun-atat-local --kpoints={args.kpoints}
 """,
         config[server].get('shebang', "#!/usr/bin/bash"))
     with open('sub', 'w', encoding='utf-8') as f:
