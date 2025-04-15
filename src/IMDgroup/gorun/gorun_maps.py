@@ -47,9 +47,9 @@ def get_args():
         required=True,
         help="Kpoint density")
     argparser.add_argument(
-        "maps_args",
-        help="maps arguments to pass (use -- to delimit maps args)",
-        nargs=argparse.REMAINDER)
+        "--maps_args",
+        help="maps arguments to pass",
+        nargs="+")
     args = argparser.parse_args()
     # Force single node for ATAT
     args.number_of_nodes = 1
