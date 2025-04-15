@@ -48,7 +48,7 @@ def get_args():
         help="Kpoint density")
     argparser.add_argument(
         "maps_args",
-        help="maps arguments to pass",
+        help="maps arguments to pass (use -- to delimit maps args)",
         nargs=argparse.REMAINDER)
     args = argparser.parse_args()
     # Force single node for ATAT
@@ -109,7 +109,7 @@ def main():
         f"""
 {config[server]['VASP-setup']}
 
-maps {args.maps_args.join(' ')} &
+maps {' '.join(args.maps_args)} &
 sleep 5
 pollmach gorun-atat-local --kpoints={args.kpoints} --local --no_vasp_config
 """,
