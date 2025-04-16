@@ -18,11 +18,14 @@ def get_args():
     parser = argparse.ArgumentParser(
         description="Run VASP in current dir, according to str.out and parent dir.")
 
-    # Required arguments
     parser.add_argument(
         "--kpoints",
         required=True,
         help="Kpoint density")
+    parser.add_argument(
+        "--frac_tol",
+        default=None,
+        help="Distance tolerance to reject structure")
     parser.add_argument(
         "vasp_command",
         help="VASP command to run",
@@ -66,7 +69,7 @@ def main():
     inputset_data = atat(args)
     assert len(inputset_data['inputsets']) == 1
     inputset = inputset_data['inputsets'][0]
-    if not structure_is_valid2(inputset.structure):
+    if not structure_is_valid2(inputset.structure, frac_tol=args.frac_tol):
         Path('error').touch()
         print("str.out has atoms too close to each other")
         return 1
