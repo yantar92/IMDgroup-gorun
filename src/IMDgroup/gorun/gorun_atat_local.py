@@ -24,7 +24,8 @@ def get_args():
         help="Kpoint density")
     parser.add_argument(
         "--frac_tol",
-        default=None,
+        default=0.5,
+        type=float,
         help="Distance tolerance to reject structure")
     parser.add_argument(
         "vasp_command",
