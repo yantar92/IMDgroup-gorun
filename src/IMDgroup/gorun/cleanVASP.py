@@ -8,6 +8,44 @@ import warnings
 import ase.io.vasp
 from ase.calculators.vasp import Vasp
 from pymatgen.io.vasp.inputs import Incar
+from xml.etree.ElementTree import ParseError
+from pymatgen.io.vasp.outputs import Vasprun
+
+
+def directory_contains_vasp_outputp(path):
+    """Return True when PATH contains VASP outputs.
+    """
+    outcar_path = os.path.join(path, 'OUTCAR')
+    if os.path.exists(outcar_path) and os.path.getsize(outcar_path) > 0:
+        return True
+    if nebp(path):
+        for dirname in os.listdir(path):
+            dirpath = os.path.join(path, dirname)
+            if os.path.isdir(dirpath) and re.match(r'[0-9]+', dirname):
+                if directory_contains_vasp_outputp(dirpath):
+                    return True
+    return False
+
+
+def directory_converged_p(path):
+    """Return True when PATH contains converged VASP output.
+    """
+    if directory_contains_vasp_outputp(path):
+        if nebp(path):
+            for dirname in os.listdir(path):
+                dirpath = os.path.join(path, dirname)
+                if os.path.isdir(dirpath) and re.match(r'[0-9]+', dirname):
+                    if not directory_converged_p(dirpath):
+                        return False
+        else:
+            try:
+                run = Vasprun(os.path.join(path, 'vasprun.xml'))
+                if not run.converged:
+                    return False
+            except (ParseError, FileNotFoundError):
+                return False
+        return True
+    return False
 
 
 def nebp(path):

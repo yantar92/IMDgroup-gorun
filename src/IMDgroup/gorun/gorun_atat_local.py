@@ -11,6 +11,8 @@ from IMDgroup.pymatgen.cli.imdg_derive import atat, scf
 from IMDgroup.pymatgen.core.structure import structure_is_valid2
 from pymatgen.io.vasp.outputs import Vasprun
 from xml.etree.ElementTree import ParseError
+from IMDgroup.gorun.cleanVASP import directory_converged_p
+
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -34,6 +36,10 @@ def run_vasp(vasp_command, directory):
     Return Vasprun object if VASP succeeds and converges and False
     otherwise.
     """
+    if directory_converged_p(directory):
+        print(f"{directory} already contains converged output. Skipping.")
+        return Vasprun(Path(directory) / "vasprun.xml")
+
     with open(Path(directory) / 'vasp.out', 'a') as f:
         print(f"Running {vasp_command} in {directory}")
         result = subprocess.run(
