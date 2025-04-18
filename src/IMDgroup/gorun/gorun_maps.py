@@ -47,6 +47,11 @@ def get_args():
         required=True,
         help="Kpoint density")
     argparser.add_argument(
+        "--frac_tol",
+        required=False,
+        default=0.5,
+        help="Tolerance for distance between atoms to reject structures")
+    argparser.add_argument(
         "--maps_args",
         help="maps arguments to pass",
         nargs="+")
@@ -115,7 +120,7 @@ def main():
 
 maps {' '.join(args.maps_args)} &
 sleep 5
-pollmach gorun-atat-local --kpoints={args.kpoints} gorun --local --no_vasp_config
+pollmach gorun-atat-local --kpoints={args.kpoints} --frac_tol={args.frac_tol} gorun --local --no_vasp_config
 """,
         config[server].get('shebang', "#!/usr/bin/bash"))
     with open('sub', 'w', encoding='utf-8') as f:
