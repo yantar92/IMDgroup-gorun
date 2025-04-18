@@ -8,6 +8,7 @@ import re
 import glob
 import os
 import dateutil
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,12 @@ def clear_slurm_logs(path='.'):
     """Clear all the slurm logs in PATH.
     """
     # Find all SLURM output files.
-    for slurm_file in glob.glob(os.path.join(path, "slurm-*.out")):
+    vaspout = Path(path) / 'vasp.out'
+    if vaspout.is_file():
+        extra_logs = [vaspout]
+    else:
+        extra_logs = []
+    for slurm_file in glob.glob(os.path.join(path, "slurm-*.out")) + extra_logs:
         try:
             os.remove(slurm_file)
             print(f"Deleted old SLURM file: {slurm_file}")
