@@ -28,6 +28,11 @@ def get_args():
         type=float,
         help="Distance tolerance to reject structure")
     parser.add_argument(
+        "--skip_relax",
+        type=bool,
+        help="Whether to skip relaxation run",
+        action="store_true")
+    parser.add_argument(
         "vasp_command",
         help="VASP command to run",
         nargs=argparse.REMAINDER)
@@ -79,8 +84,11 @@ def main():
     inputset.write_input(output_dir="ATAT")
 
     # Run VASP
-    if not run_vasp(args.vasp_command, "ATAT"):
-        return 1
+    if args.skip_relax:
+        print("--skip_relax passed.  Not running relaxation in ./ATAT")
+    else:
+        if not run_vasp(args.vasp_command, "ATAT"):
+            return 1
 
     # Create SCF input
     args.input_directory = "ATAT"
