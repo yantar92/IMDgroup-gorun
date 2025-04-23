@@ -7,6 +7,7 @@ or error files.
 import argparse
 import subprocess
 from pathlib import Path
+import numpy as np
 from IMDgroup.pymatgen.cli.imdg_derive import atat, scf
 from IMDgroup.pymatgen.core.structure import structure_is_valid2
 from pymatgen.io.vasp.outputs import Vasprun
@@ -79,7 +80,23 @@ def main():
     inputset = inputset_data['inputsets'][0]
     if not structure_is_valid2(inputset.structure, frac_tol=args.frac_tol):
         Path('error').touch()
+        Path('error_atoms_too_close').touch()
         print("str.out has atoms too close to each other")
+        return 1
+    kpoints = inputset.kpoints
+    assert kpoints is not None
+    kpoints = np.array(kpoints.kpts[0])
+    # We had cases like KPOINTS 2x2x9 (denity=2500)
+    # that distorted energy outputs due to small number (2) of kpoints
+    # along the individual axis.  Filter out such cases as they
+    # lead to energies that are not comparable with kpoint grids with
+    # the same energy for smaller supercells: 11x11x7 (density=2500)
+    if np.all(kpoints > 3) or np.all(kpoints <= 3):
+        pass
+    else:
+        Path('error').touch()
+        Path('error_kpoints_dim_sparse').touch()
+        print("KPOINTS has too few points along one of the axes")
         return 1
     inputset.write_input(output_dir="ATAT")
 
