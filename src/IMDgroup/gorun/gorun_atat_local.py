@@ -99,7 +99,7 @@ def main(args=None):
     else:
         Path('error').touch()
         Path('error_kpoints_dim_sparse').touch()
-        print("KPOINTS has too few points along one of the axes")
+        print(f"KPOINTS has too few points along one of the axes: {kpoints}")
         return 1
     inputset.write_input(output_dir="ATAT")
 
