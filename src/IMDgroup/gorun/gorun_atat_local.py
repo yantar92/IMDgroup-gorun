@@ -69,8 +69,9 @@ def run_vasp(vasp_command, directory):
     return run
 
 
-def main():
-    args = get_args()
+def main(args=None):
+    if args is None:
+        args = get_args()
     # Generate VASP input
     args.atat_structure = "str.out"
     args.input_directory = "../"
