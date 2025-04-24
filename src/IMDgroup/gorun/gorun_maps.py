@@ -52,6 +52,10 @@ def get_args():
         default=0.5,
         help="Tolerance for distance between atoms to reject structures")
     argparser.add_argument(
+        "--skip_relax",
+        help="Whether to skip relaxation run",
+        action="store_true")
+    argparser.add_argument(
         "--maps_args",
         help="maps arguments to pass",
         nargs="+")
@@ -120,7 +124,7 @@ def main():
 
 maps {' '.join(args.maps_args)} &
 sleep 5
-pollmach gorun-atat-local --kpoints={args.kpoints} --frac_tol={args.frac_tol} gorun --local --no_vasp_config
+pollmach gorun-atat-local {'--skip_relax' if args.skip_relax else ''} --kpoints={args.kpoints} --frac_tol={args.frac_tol} gorun --local --no_vasp_config
 """,
         config[server].get('shebang', "#!/usr/bin/bash"))
     with open('sub', 'w', encoding='utf-8') as f:
