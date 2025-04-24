@@ -93,7 +93,7 @@ def main(args=None):
     # the same energy for smaller supercells: 11x11x7 (density=2500)
     if np.all(kpoints > 3) or np.all(kpoints <= 3):
         pass
-    elif kpoints[kpoints < 3].size == 1:
+    elif kpoints[kpoints <= 3].size == 1:
         # According to light testing, a 11x11x2 is convergent.
         pass
     else:
