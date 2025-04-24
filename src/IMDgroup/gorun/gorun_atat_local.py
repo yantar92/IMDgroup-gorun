@@ -30,7 +30,6 @@ def get_args():
         help="Distance tolerance to reject structure")
     parser.add_argument(
         "--skip_relax",
-        type=bool,
         help="Whether to skip relaxation run",
         action="store_true")
     parser.add_argument(
