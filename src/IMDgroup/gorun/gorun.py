@@ -172,7 +172,7 @@ def main():
 
     # Submit the job using sbatch.
     if args.local:
-        os.system("bash sub")
+        os.system("bash sub > vasp.out 2>&1")
         print(colored('Running job locally...', "green"))
     else:
         os.system("sbatch sub")
