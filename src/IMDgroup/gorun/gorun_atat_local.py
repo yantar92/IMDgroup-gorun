@@ -25,9 +25,9 @@ def get_args():
         help="Kpoint density")
     parser.add_argument(
         "--frac_tol",
-        default=0.5,
+        default=0,
         type=float,
-        help="Distance tolerance to reject structure")
+        help="Distance tolerance to reject structure (default: 0 = no rejections)")
     parser.add_argument(
         "--skip_relax",
         help="Whether to skip relaxation run",
