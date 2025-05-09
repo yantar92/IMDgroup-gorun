@@ -4,6 +4,7 @@ Run (1) parent directory configuration; (2) SCF run; (3) Write energy
 or error files.
 """
 
+import datetime
 import argparse
 import subprocess
 from pathlib import Path
@@ -50,7 +51,7 @@ def run_vasp(vasp_command, directory):
         return Vasprun(Path(directory) / "vasprun.xml")
 
     with open(Path(directory) / 'vasp.out', 'a') as f:
-        print(f"Running {vasp_command} in {directory}")
+        print(f"{datetime.datetime.now()} Running {vasp_command} in {directory}")
         result = subprocess.run(
             vasp_command,
             cwd=directory,
