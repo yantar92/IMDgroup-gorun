@@ -60,9 +60,11 @@ def run_vasp(vasp_command, directory):
             stderr=subprocess.STDOUT)
     try:
         run = Vasprun(Path(directory) / "vasprun.xml")
-    except (ValueError, FileNotFoundError, ParseError):
+    except (ValueError, ParseError):
+        run = 'failed'
+    except FileNotFoundError:
         run = None
-    if result.returncode != 0 or (run is not None and not run.converged):
+    if result.returncode != 0 or run == 'failed' or (run is not None and not run.converged):
         Path('error').touch()
         return False
     if run is None:
