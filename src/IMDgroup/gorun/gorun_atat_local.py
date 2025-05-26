@@ -9,6 +9,7 @@ import argparse
 import subprocess
 from pathlib import Path
 import numpy as np
+from termcolor import colored
 from IMDgroup.pymatgen.cli.imdg_derive import atat, scf
 from IMDgroup.pymatgen.core.structure import structure_is_valid2
 from pymatgen.io.vasp.outputs import Vasprun
@@ -75,6 +76,9 @@ def run_vasp(vasp_command, directory):
 def main(args=None):
     if args is None:
         args = get_args()
+    if Path('ATAT').is_dir() or Path('ATAT.SCF').is_dir():
+        print(colored("ATAT/ATAT.SCF already exists.  Exiting", "red"))
+        return 1
     # Generate VASP input
     args.atat_structure = "str.out"
     args.input_directory = "../"
@@ -84,7 +88,7 @@ def main(args=None):
     if not structure_is_valid2(inputset.structure, frac_tol=args.frac_tol):
         Path('error').touch()
         Path('error_atoms_too_close').touch()
-        print("str.out has atoms too close to each other")
+        print(colored("str.out has atoms too close to each other", "red"))
         return 1
     kpoints = inputset.kpoints
     assert kpoints is not None
@@ -102,13 +106,13 @@ def main(args=None):
     else:
         Path('error').touch()
         Path('error_kpoints_dim_sparse').touch()
-        print(f"KPOINTS has too few points along one of the axes: {kpoints}")
+        print(colored(f"KPOINTS has too few points along one of the axes: {kpoints}", "red"))
         return 1
     inputset.write_input(output_dir="ATAT")
 
     # Run VASP
     if args.skip_relax:
-        print("--skip_relax passed.  Not running relaxation in ./ATAT")
+        print(colored("--skip_relax passed.  Not running relaxation in ./ATAT", "yellow"))
     else:
         if not run_vasp(args.vasp_command, "ATAT"):
             return 1
