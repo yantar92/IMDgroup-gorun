@@ -54,7 +54,7 @@ def run_vasp(vasp_command, directory):
     print(f"{datetime.datetime.now()} Running {vasp_command} in {directory}")
     result = subprocess.run(
         vasp_command,
-        shell=True,
+        shell=False,
         cwd=directory,
         check=False,
     )
