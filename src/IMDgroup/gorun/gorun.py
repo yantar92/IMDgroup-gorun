@@ -159,6 +159,7 @@ def main():
             if os.path.isdir(dirname) and re.match(r'[0-9]+', dirname):
                 clear_slurm_logs(dirname)
 
+    print(f"Arguments: {args}")
     base_script = f"""
 {config[server]['VASP-setup'] if not args.no_vasp_config else ""}
 
