@@ -77,39 +77,39 @@ def run_vasp(vasp_command, directory):
 def main(args=None):
     if args is None:
         args = get_args()
-    if Path('ATAT').is_dir() or Path('ATAT.SCF').is_dir():
-        print(colored("ATAT/ATAT.SCF already exists.  Exiting", "red"))
-        return 1
-    # Generate VASP input
-    args.atat_structure = "str.out"
-    args.input_directory = "../"
-    inputset_data = atat(args)
-    assert len(inputset_data['inputsets']) == 1
-    inputset = inputset_data['inputsets'][0]
-    if not structure_is_valid2(inputset.structure, frac_tol=args.frac_tol):
-        Path('error').touch()
-        Path('error_atoms_too_close').touch()
-        print(colored("str.out has atoms too close to each other", "red"))
-        return 1
-    kpoints = inputset.kpoints
-    assert kpoints is not None
-    kpoints = np.array(kpoints.kpts[0])
-    # We had cases like KPOINTS 2x2x9 (denity=2500)
-    # that distorted energy outputs due to small number (2) of kpoints
-    # along the individual axis.  Filter out such cases as they
-    # lead to energies that are not comparable with kpoint grids with
-    # the same energy for smaller supercells: 11x11x7 (density=2500)
-    if np.all(kpoints > 3) or np.all(kpoints <= 3):
-        pass
-    elif kpoints[kpoints <= 3].size == 1:
-        # According to light testing, a 11x11x2 is convergent.
-        pass
+    if Path('ATAT').is_dir():
+        print(colored("ATAT already exists.  Skipping", "yellow"))
     else:
-        Path('error').touch()
-        Path('error_kpoints_dim_sparse').touch()
-        print(colored(f"KPOINTS has too few points along one of the axes: {kpoints}", "red"))
-        return 1
-    inputset.write_input(output_dir="ATAT")
+        # Generate VASP input
+        args.atat_structure = "str.out"
+        args.input_directory = "../"
+        inputset_data = atat(args)
+        assert len(inputset_data['inputsets']) == 1
+        inputset = inputset_data['inputsets'][0]
+        if not structure_is_valid2(inputset.structure, frac_tol=args.frac_tol):
+            Path('error').touch()
+            Path('error_atoms_too_close').touch()
+            print(colored("str.out has atoms too close to each other", "red"))
+            return 1
+        kpoints = inputset.kpoints
+        assert kpoints is not None
+        kpoints = np.array(kpoints.kpts[0])
+        # We had cases like KPOINTS 2x2x9 (denity=2500)
+        # that distorted energy outputs due to small number (2) of kpoints
+        # along the individual axis.  Filter out such cases as they
+        # lead to energies that are not comparable with kpoint grids with
+        # the same energy for smaller supercells: 11x11x7 (density=2500)
+        if np.all(kpoints > 3) or np.all(kpoints <= 3):
+            pass
+        elif kpoints[kpoints <= 3].size == 1:
+            # According to light testing, a 11x11x2 is convergent.
+            pass
+        else:
+            Path('error').touch()
+            Path('error_kpoints_dim_sparse').touch()
+            print(colored(f"KPOINTS has too few points along one of the axes: {kpoints}", "red"))
+            return 1
+        inputset.write_input(output_dir="ATAT")
 
     # Run VASP
     if args.skip_relax:
@@ -118,12 +118,15 @@ def main(args=None):
         if not run_vasp(args.vasp_command, "ATAT"):
             return 1
 
-    # Create SCF input
-    args.input_directory = "ATAT"
-    inputset_data = scf(args)
-    assert len(inputset_data['inputsets']) == 1
-    inputset = inputset_data['inputsets'][0]
-    inputset.write_input(output_dir="ATAT.SCF")
+    if Path('ATAT.SCF').is_dir():
+        print(colored("ATAT.SCF already exists.  Skipping", "yellow"))
+    else:
+        # Create SCF input
+        args.input_directory = "ATAT"
+        inputset_data = scf(args)
+        assert len(inputset_data['inputsets']) == 1
+        inputset = inputset_data['inputsets'][0]
+        inputset.write_input(output_dir="ATAT.SCF")
 
     # Run VASP
     run = run_vasp(args.vasp_command, "ATAT.SCF")
