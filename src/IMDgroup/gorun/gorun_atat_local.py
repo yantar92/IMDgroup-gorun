@@ -59,7 +59,7 @@ def run_vasp(vasp_command, directory):
             cwd=directory,
             check=False,
             stdout=f,
-            stderr=subprocess.STDOUT)
+            stderr=f)
     try:
         run = Vasprun(Path(directory) / "vasprun.xml")
     except (ValueError, ParseError):
