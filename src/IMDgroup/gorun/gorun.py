@@ -177,7 +177,8 @@ def main():
 
     # Submit the job using sbatch.
     if args.local:
-        with open("vasp.out", "w") as f:
+        print(script)
+        with open("vasp.out", "w", encoding='utf-8') as f:
             subprocess.run(
                 script,
                 shell=True,
