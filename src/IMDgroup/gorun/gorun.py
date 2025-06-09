@@ -177,6 +177,7 @@ def main():
 
     # Submit the job using sbatch.
     if args.local:
+        print(script)
         subprocess.run(
             script,
             shell=True,
