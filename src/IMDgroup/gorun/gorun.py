@@ -172,13 +172,13 @@ def main():
             [get_sbatch_args(args, config, server, queue) for queue in queues],
             base_script,
             shebang)
-    with open('sub', 'w', encoding='utf-8') as f:
-        f.write(script)
+        with open('sub', 'w', encoding='utf-8') as f:
+            f.write(script)
 
     # Submit the job using sbatch.
     if args.local:
         print(script)
-        with open("vasp.out", "w", encoding='utf-8') as f:
+        with open("vasp.out", "a", encoding='utf-8') as f:
             subprocess.run(
                 script,
                 shell=True,
