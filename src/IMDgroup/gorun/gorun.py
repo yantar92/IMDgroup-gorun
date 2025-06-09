@@ -159,14 +159,19 @@ def main():
             if os.path.isdir(dirname) and re.match(r'[0-9]+', dirname):
                 clear_slurm_logs(dirname)
 
-    script = get_best_script(
-        [get_sbatch_args(args, config, server, queue) for queue in queues],
-        f"""
+    base_script = f"""
 {config[server]['VASP-setup'] if not args.no_vasp_config else ""}
 
 {config[server].get('mpiexec', 'mpiexec')} {os.environ["VASP_PATH"]}/bin/vasp_ncl
-        """,
-        config[server].get('shebang', "#!/usr/bin/bash"))
+        """
+    shebang = config[server].get('shebang', "#!/usr/bin/bash")
+    if args.local:
+        script = f"{shebang}\n{base_script}"
+    else:
+        script = get_best_script(
+            [get_sbatch_args(args, config, server, queue) for queue in queues],
+            base_script,
+            shebang)
     with open('sub', 'w', encoding='utf-8') as f:
         f.write(script)
 
