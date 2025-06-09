@@ -51,16 +51,13 @@ def run_vasp(vasp_command, directory):
         print(f"{directory} already contains converged output. Skipping.")
         return Vasprun(Path(directory) / "vasprun.xml")
 
-    with open(Path(directory) / 'vasp.out', 'a') as f:
-        print(f"{datetime.datetime.now()} Running {vasp_command} in {directory}")
-        result = subprocess.run(
-            vasp_command,
-            shell=True,
-            cwd=directory,
-            check=False,
-            # stdout=f,
-            # stderr=f
-        )
+    print(f"{datetime.datetime.now()} Running {vasp_command} in {directory}")
+    result = subprocess.run(
+        vasp_command,
+        shell=True,
+        cwd=directory,
+        check=False,
+    )
     try:
         run = Vasprun(Path(directory) / "vasprun.xml")
     except (ValueError, ParseError):
