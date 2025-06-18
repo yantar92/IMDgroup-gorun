@@ -74,6 +74,10 @@ gorun 2 24:00:00
         "--local",
         help="Whether to run locally (do not use sbatch)",
         action="store_true")
+    argparser.add_argument(
+        "--force",
+        help="When provided, force running VASP",
+        action="store_true")
     return argparser.parse_args()
 
 
@@ -122,7 +126,7 @@ def main():
         return 1
 
     working_dir = os.getcwd()
-    if directory_queued_p(working_dir):
+    if directory_queued_p(working_dir) and not args.force:
         print(colored(
             "A job is already running in this directory. "
             "Exiting without submitting a new job.",
@@ -136,7 +140,7 @@ def main():
             "yellow"))
         return 1
 
-    if  not mdp('.') and directory_converged_p('.'):
+    if  not mdp('.') and directory_converged_p('.') and not args.force:
         print(colored(
             'VASP run already converged. '
             'Exiting without submitting a new job.',
