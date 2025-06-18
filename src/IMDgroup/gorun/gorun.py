@@ -13,7 +13,7 @@ from IMDgroup.gorun.slurm import\
     (barf_if_no_cmd, directory_queued_p,
      clear_slurm_logs, get_best_script)
 from IMDgroup.gorun.cleanVASP import\
-    (prepare_vasp_dir, nebp, directory_converged_p,
+    (prepare_vasp_dir, nebp, mdp, directory_converged_p,
      directory_contains_vasp_outputp)
 from IMDgroup.gorun.sbatch import\
     (barf_if_no_env, get_config, current_server, get_sbatch_args)
@@ -136,7 +136,7 @@ def main():
             "yellow"))
         return 1
 
-    if directory_converged_p('.'):
+    if  not mdp('.') and directory_converged_p('.'):
         print(colored(
             'VASP run already converged. '
             'Exiting without submitting a new job.',

@@ -59,6 +59,17 @@ def nebp(path):
     return False
 
 
+def mdp(path):
+    """Return True when PATH is an MD run.
+    """
+    incar_path = os.path.join(path, 'INCAR')
+    if os.path.isfile(incar_path):
+        incar = Incar.from_file(incar_path)
+        if incar.get('IBRION') == 0:
+            return True
+    return False
+
+
 def contcar_to_poscar(path) -> None:
     """When CONTCAR exists, copy it over to POSCAR in PATH.
     """
