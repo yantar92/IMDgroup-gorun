@@ -146,6 +146,7 @@ def generate_potcar(path='.', keep_existing=False) -> None:
             break
     if poscar_path is not None:
         if os.path.isfile(poscar_path) and keep_existing:
+            print(f'{path}: Not updating existing POTCAR.')
             return
         atoms = ase.io.vasp.read_vasp(poscar_path)
         calc_temp = Vasp(xc='PBE', setups={'base': 'recommended'})
