@@ -131,8 +131,10 @@ def clean_vasp_inputs(path='.') -> None:
             clean_vasp_input(os.path.join(path, file))
 
 
-def generate_potcar(path='.') -> None:
+def generate_potcar(path='.', keep_existing=False) -> None:
     """Generate POTCAR from POSCAR file in PATH.
+    When KEEP_EXISTING is True and POTCAR already exists, do not
+    re-generate it.
     """
     poscar_paths = [os.path.join(path, 'POSCAR')]
     if nebp(path):
@@ -143,7 +145,9 @@ def generate_potcar(path='.') -> None:
             poscar_path = p
             break
     if poscar_path is not None:
-        atoms = ase.io.vasp.read_vasp(file=poscar_path)
+        if os.path.isfile(poscar_path) and keep_existing:
+            return
+        atoms = ase.io.vasp.read_vasp(poscar_path)
         calc_temp = Vasp(xc='PBE', setups={'base': 'recommended'})
         calc_temp.initialize(atoms)
         potcar_path = os.path.join(path, 'POTCAR')
@@ -169,8 +173,10 @@ def check_incar(path):
         incar.check_params()
 
 
-def prepare_vasp_dir(path='.') -> None:
+def prepare_vasp_dir(path='.', keep_potcar=False) -> None:
     """Prepare and cleanup VASP inputs in PATH.
+    When KEEP_POTCAR is True, and POTCAR file already exist do not
+    re-generate it.
     """
     check_incar(path)
     # If CONTCAR exists and is non-empty, copy it to POSCAR.
@@ -178,6 +184,6 @@ def prepare_vasp_dir(path='.') -> None:
     # Clean the POSCAR, INCAR, and KPOINTS files before running the job.
     clean_vasp_inputs(path)
     # If POSCAR exists, initialize ASE and generate the POTCAR file.
-    generate_potcar(path)
+    generate_potcar(path, keep_potcar)
     # Copy over vdw kernel
     put_vdw_kernel(path)

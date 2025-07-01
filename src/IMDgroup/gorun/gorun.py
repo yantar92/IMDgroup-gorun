@@ -78,6 +78,10 @@ gorun 2 24:00:00
         "--force",
         help="When provided, force running VASP",
         action="store_true")
+    argparser.add_argument(
+        "--keep_potcar",
+        help="When POTCAR is already present, do not re-generate it",
+        action="store_true")
     return argparser.parse_args()
 
 
@@ -151,7 +155,7 @@ def main():
         run_folder = get_next_run_folder()
         backup_current_dir(run_folder)
 
-    prepare_vasp_dir('.')
+    prepare_vasp_dir('.', args.keep_potcar)
     if nebp('.'):
         for dirname in sorted(os.listdir('.')):
             if os.path.isdir(dirname) and re.match(r'[0-9]+', dirname):
