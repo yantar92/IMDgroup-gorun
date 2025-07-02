@@ -122,7 +122,7 @@ def check_volume_distortion(
     distortion = np.linalg.norm(strain)
     if distortion < threshold:
         return True
-    print(colored(f"POSCAR->CONTCAR strain exceeds {threshold*100}%: {distortion}"))
+    print(colored(f"POSCAR->CONTCAR strain exceeds {threshold*100}%: {distortion}", "red"))
     return False
 
 
@@ -157,7 +157,7 @@ def check_sublattice_flip(
 
     if np.isclose(dist_relax, dist_sublattice, rtol=0.001):
         return True
-    print(colored("POSCAR&CONTCAR flipped sublattice configuration"))
+    print(colored("POSCAR&CONTCAR flipped sublattice configuration", "red"))
     return False
 
 
