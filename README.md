@@ -49,7 +49,7 @@ We welcome contributions in all forms. If you want to contribute,
 please fork this repository, make changes and send us a pull request!
 
 
-# Acknolewdgements
+# Acknowledgements
 
 We acknowledge financial support from the National Centre for Research
 and Development (NCBR) under project
