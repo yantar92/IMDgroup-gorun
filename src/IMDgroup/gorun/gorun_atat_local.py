@@ -45,6 +45,7 @@ from pymatgen.io.vasp.outputs import Vasprun
 from pymatgen.core import Structure, DummySpecie
 from xml.etree.ElementTree import ParseError
 from IMDgroup.gorun.cleanVASP import directory_converged_p
+from IMDgroup.pymatgen.io.vasp.vaspdir import IMDGVaspDir
 
 
 def get_args():
@@ -215,8 +216,9 @@ def main(args=None):
     else:
         if not run_vasp(args.vasp_command, "ATAT"):
             return 1
-        str_before = Structure.from_file('ATAT/POSCAR')
-        str_after = Structure.from_file('ATAT/CONTCAR')
+        vaspdir = IMDGVaspDir("ATAT")
+        str_before = vaspdir.initial_structure
+        str_after = vaspdir.structure
         if not check_volume_distortion(str_before, str_after):
             Path('error').touch()
             Path('error_strain').touch()
