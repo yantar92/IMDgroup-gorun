@@ -28,18 +28,21 @@
 """Run VASP according to ATAT-generated structure.
 Use VASP configuration from parent directory as reference.
 Run (1) parent directory configuration; (2) SCF run; (3) Write energy
-or error files.
+or error files.  (4) Mark structures that deviate too much from sublattice
+with error.
 """
 
 import datetime
 import argparse
 import subprocess
+import math
 from pathlib import Path
 import numpy as np
 from termcolor import colored
 from IMDgroup.pymatgen.cli.imdg_derive import atat, scf
-from IMDgroup.pymatgen.core.structure import structure_is_valid2
+from IMDgroup.pymatgen.core.structure import structure_distance, structure_is_valid2
 from pymatgen.io.vasp.outputs import Vasprun
+from pymatgen.core import Structure, DummySpecie
 from xml.etree.ElementTree import ParseError
 from IMDgroup.gorun.cleanVASP import directory_converged_p
 
@@ -75,7 +78,7 @@ def run_vasp(vasp_command, directory):
     otherwise.
     """
     if directory_converged_p(directory):
-        print(f"{directory} already contains converged output. Skipping.")
+        print(f"{directory} already contains converged output. Not running VASP")
         return Vasprun(Path(directory) / "vasprun.xml")
 
     print(f"{datetime.datetime.now()} Running {vasp_command} in {directory}")
@@ -99,11 +102,81 @@ def run_vasp(vasp_command, directory):
     return run
 
 
+def check_volume_distortion(
+        str_before: Structure,
+        str_after: Structure,
+        # 0.1 is what is done by ATAT in checkcell subroutine
+        threshold: float = 0.1) -> bool:
+    """Return False when lattice distortion is too large for STR_BEFORE and STR_AFTER.
+    The lattice distortion is a norm of engineering strain tensor.
+    The distortion is considered "too large" when it is no less than THRESHOLD.
+    The default 0.1 threshold is following ATAT source code.
+    """
+    lat_before = str_before.lattice.matrix
+    lat_after = str_after.lattice.matrix
+    # normalize matrices
+    lat_before = lat_before / math.pow(np.linalg.det(lat_before), 1.0/3.0)
+    lat_after = lat_after / math.pow(np.linalg.det(lat_after), 1.0/3.0)
+    transform = np.dot(np.linalg.inv(lat_before), lat_after) - np.eye(3)
+    strain = (transform + np.linalg.matrix_transpose(transform))/2.0
+    distortion = np.linalg.norm(strain)
+    if distortion < threshold:
+        return True
+    print(colored(f"POSCAR->CONTCAR strain exceeds {threshold*100}%: {distortion}"))
+    return False
+
+
+def check_sublattice_flip(
+        str_before: Structure,
+        str_after: Structure,
+        sublattice: Structure) -> bool:
+    """Check if STR_AFTER flipped its SUBLATTICE sites compared to STR_BEFORE.
+    Return True when STR_AFTER occupies the same sublattice configuration as
+    STR_BEFORE.  The SUBLATTICE is full sublattice with all the sites
+    occupied (as per str.in).
+
+    Note that specie sites that are scanned by cluster expansion must be
+    marked with the same specie name in all the arguments.  For
+    example, if ATAT is running on Li, Vac system, both Li and Vac species
+    should be replaced with, say X dummy specie.
+    """
+    # First, scale STR_AFTER lattice to fit STR_BEFORE and SUBLATTICE
+    # Assume that STR_BEFORE and SUBLATTICE have the same lattices
+    str_after_normalized = str_after.copy()
+    str_after_normalized.lattice = str_before.lattice
+    dist_relax = structure_distance(str_before, str_after_normalized)
+
+    # Replace all species with X to compare with anonymous sublattice
+    str_after_normalized = str_after_normalized.copy()
+    for site in str_after_normalized:
+        site.species = DummySpecie('X')
+    sublattice = sublattice.copy()
+    for site in sublattice:
+        site.species = DummySpecie('X')
+    dist_sublattice = structure_distance(str_after_normalized, sublattice)
+
+    if np.isclose(dist_relax, dist_sublattice, rtol=0.001):
+        return True
+    print(colored("POSCAR&CONTCAR flipped sublattice configuration"))
+    return False
+
+
+def read_sublattice() -> Structure:
+    """Read full sublattice from str.out.
+    Replace vacancies (Vac) with X dummy elements.
+    """
+    from pymatgen.io.atat import Mcsqs
+    # We manually replace Vac with X instances that can be read by pymatgen.
+    atat_structure_text = Path('str.out').read_text(encoding='utf-8')
+    atat_structure_text = atat_structure_text.replace("Vac", "X")
+    return Mcsqs.structure_from_str(atat_structure_text)
+
+
 def main(args=None):
     if args is None:
         args = get_args()
     if Path('ATAT').is_dir():
-        print(colored("ATAT already exists.  Skipping", "yellow"))
+        print(colored("ATAT already exists.  Not modifying", "yellow"))
     else:
         # Generate VASP input
         args.atat_structure = "str.out"
@@ -142,9 +215,20 @@ def main(args=None):
     else:
         if not run_vasp(args.vasp_command, "ATAT"):
             return 1
+        str_before = Structure.from_file('ATAT/POSCAR')
+        str_after = Structure.from_file('ATAT/CONTCAR')
+        if not check_volume_distortion(str_before, str_after):
+            Path('error').touch()
+            Path('error_strain').touch()
+            return 1
+        sublattice = read_sublattice()
+        if not check_sublattice_flip(str_before, str_after, sublattice):
+            Path('error').touch()
+            Path('error_sublattice').touch()
+            return 1
 
     if Path('ATAT.SCF').is_dir():
-        print(colored("ATAT.SCF already exists.  Skipping", "yellow"))
+        print(colored("ATAT.SCF already exists.  Not modifying", "yellow"))
     else:
         # Create SCF input
         args.input_directory = "ATAT"
