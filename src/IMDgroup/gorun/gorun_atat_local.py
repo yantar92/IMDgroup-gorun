@@ -40,7 +40,7 @@ from xml.etree.ElementTree import ParseError
 import numpy as np
 from termcolor import colored
 from IMDgroup.pymatgen.cli.imdg_derive import atat as derive_atat
-from IMDgroup.pymatgen.cli.imdg_derive import derive_scf
+from IMDgroup.pymatgen.cli.imdg_derive import derive as derive_scf
 from IMDgroup.pymatgen.core.structure import structure_is_valid2
 import IMDgroup.pymatgen.io.atat as atat
 from pymatgen.io.vasp.outputs import Vasprun
