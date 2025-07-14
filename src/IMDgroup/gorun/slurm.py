@@ -66,6 +66,14 @@ def directory_queued_p(path: str) -> bool:
                  shell=True).decode('utf-8').split())
 
 
+def user_job_count() -> int:
+    """Return the number of currently running slurm jobs.
+    """
+    barf_if_no_cmd('squeue')
+    barf_if_no_cmd('wc')
+    return int(subprocess.check_output("squeue -u $USER -o %Z | wc -l", shell=True)) - 1
+
+
 def clear_slurm_logs(path='.'):
     """Clear all the slurm logs in PATH.
     """

@@ -33,12 +33,13 @@ import re
 import warnings
 import argparse
 import datetime
+import time
 import subprocess
 import glob
 from termcolor import colored
 from IMDgroup.gorun.slurm import\
     (barf_if_no_cmd, directory_queued_p,
-     clear_slurm_logs, get_best_script)
+     clear_slurm_logs, get_best_script, user_job_count)
 from IMDgroup.gorun.cleanVASP import\
     (prepare_vasp_dir, nebp, mdp, directory_converged_p,
      directory_contains_vasp_outputp)
@@ -109,6 +110,13 @@ gorun 2 24:00:00
         "--keep_potcar",
         help="When POTCAR is already present, do not re-generate it",
         action="store_true")
+    argparser.add_argument(
+        "--max_slurm_jobs",
+        help="Maximum of slurm jobs allowed to run simultaneously. "
+        "Wait until squeue shortens below this number before running VASP.",
+        type=int,
+        default=0
+    )
     return argparser.parse_args()
 
 
@@ -171,12 +179,17 @@ def main():
             "yellow"))
         return 1
 
-    if  not mdp('.') and directory_converged_p('.') and not args.force:
+    if not mdp('.') and directory_converged_p('.') and not args.force:
         print(colored(
             'VASP run already converged. '
             'Exiting without submitting a new job.',
             "yellow"))
         return 1
+
+    if args.max_slurm_jobs > 0:
+        while user_job_count() >= args.max_slurm_jobs:
+            print(colored("Waiting for submitted jobs to finish", "gray"))
+            time.sleep(10)
 
     if directory_contains_vasp_outputp('.'):
         run_folder = get_next_run_folder()
