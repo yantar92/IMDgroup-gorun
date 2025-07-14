@@ -188,7 +188,7 @@ def main():
 
     if args.max_slurm_jobs > 0:
         while user_job_count() >= args.max_slurm_jobs:
-            print(colored("Waiting for submitted jobs to finish", "gray"))
+            print(colored("Waiting for submitted jobs to finish", "grey"))
             time.sleep(10)
 
     if directory_contains_vasp_outputp('.'):
