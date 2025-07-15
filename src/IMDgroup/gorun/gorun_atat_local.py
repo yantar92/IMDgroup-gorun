@@ -184,8 +184,8 @@ def main(args=None):
                 match_species=False)
             if dist_sublattice >= args.sublattice_cutoff:
                 print(colored(
-                    f"Sublattive deviation {dist_sublattice} >= cutoff"
-                    " {args.sublattice_cutoff}.  Marking as error", "red"))
+                    f"Sublattive deviation {dist_sublattice:.2f} >= cutoff"
+                    f" {args.sublattice_cutoff:.2f}.  Marking as error", "red"))
                 Path('error').touch()
                 Path('error_sublattice').touch()
             
