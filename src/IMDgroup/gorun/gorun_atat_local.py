@@ -44,7 +44,7 @@ from IMDgroup.pymatgen.cli.imdg_derive import scf as derive_scf
 from IMDgroup.pymatgen.core.structure import structure_is_valid2
 import IMDgroup.pymatgen.io.atat as atat
 from pymatgen.io.vasp.outputs import Vasprun
-from IMDgroup.pymatgen.core.structure import IMDStructure as Structure
+from IMDgroup.pymatgen.core.structure import IMDStructure as Structure, structure_distance
 from IMDgroup.gorun.cleanVASP import directory_converged_p
 from IMDgroup.pymatgen.io.vasp.vaspdir import IMDGVaspDir
 
@@ -66,6 +66,12 @@ def get_args():
         "--skip_relax",
         help="Whether to skip relaxation run",
         action="store_true")
+    parser.add_argument(
+        "--sublattice_cutoff",
+        help="Maximum allowed sublattice deviation",
+        type=float,
+        default=None
+    )
     parser.add_argument(
         "vasp_command",
         help="VASP command to run",
@@ -163,7 +169,22 @@ def main(args=None):
             sublattice2 =\
                 atat.fit_sublattice_to_structure(sublattice, str_after)
             sublattice2.to_file('str.out', fmt='atat')
-
+            sublattice = sublattice2
+        if args.sublattice_cutoff is not None:
+            str_after_normalized = str_after.copy()
+            str_after_normalized.lattice = sublattice.lattice
+            dist_sublattice = structure_distance(
+                str_after_normalized, sublattice,
+                # Compare specie-insensitively
+                match_first=True,
+                match_species=False)
+            if dist_sublattice >= args.sublattice_cutoff:
+                print(colored(
+                    f"Sublattive deviation {dist_sublattice} >= cutoff"
+                    " {args.sublattice_cutoff}.  Marking as error", "red"))
+                Path('error').touch()
+                Path('error_sublattice').touch()
+            
     if Path('ATAT.SCF').is_dir():
         print(colored("ATAT.SCF already exists.  Not modifying", "yellow"))
     else:
