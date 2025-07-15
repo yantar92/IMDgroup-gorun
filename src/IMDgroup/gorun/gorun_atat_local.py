@@ -158,10 +158,11 @@ def main(args=None):
         sublattice = Structure.from_file('str.out')
         if not atat.check_sublattice_flip(str_before, str_after, sublattice):
             print(colored(
-                "POSCAR&CONTCAR flipped sublattice configuration", "red"))
-            Path('error').touch()
-            Path('error_sublattice').touch()
-            return 1
+                "POSCAR&CONTCAR flipped sublattice configuration.  Updating str.out", "yellow"))
+            Path('str.out').rename('str.out.old')
+            sublattice2 =\
+                atat.fit_sublattice_to_structure(sublattice, str_after)
+            sublattice2.to_file('str.out', fmt='atat')
 
     if Path('ATAT.SCF').is_dir():
         print(colored("ATAT.SCF already exists.  Not modifying", "yellow"))
