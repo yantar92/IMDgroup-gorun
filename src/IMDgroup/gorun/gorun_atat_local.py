@@ -175,21 +175,23 @@ def main(args=None):
             else:
                 print(colored("str.out.old exists.  Not overwriting", "yellow"))
             sublattice = sublattice2
+        str_after_normalized = str_after.copy()
+        str_after_normalized.lattice = sublattice.lattice
+        dist_sublattice = structure_distance(
+            str_after_normalized, sublattice,
+            # Compare specie-insensitively
+            match_first=True,
+            match_species=False)
+        Path("sublattice_deviation").write_text(
+            f"{dist_sublattice:.4f}\n", encoding='utf-8')
         if args.sublattice_cutoff is not None:
-            str_after_normalized = str_after.copy()
-            str_after_normalized.lattice = sublattice.lattice
-            dist_sublattice = structure_distance(
-                str_after_normalized, sublattice,
-                # Compare specie-insensitively
-                match_first=True,
-                match_species=False)
             if dist_sublattice >= args.sublattice_cutoff:
                 print(colored(
                     f"Sublattice deviation {dist_sublattice:.2f} >= cutoff"
                     f" {args.sublattice_cutoff:.2f}.  Marking as error", "red"))
                 Path('error').touch()
                 Path('error_sublattice').touch()
-            
+
     if Path('ATAT.SCF').is_dir():
         print(colored("ATAT.SCF already exists.  Not modifying", "yellow"))
     else:
