@@ -83,6 +83,12 @@ def get_args():
         help="Whether to skip relaxation run",
         action="store_true")
     argparser.add_argument(
+        "--sublattice_cutoff",
+        help="Maximum allowed sublattice deviation",
+        type=float,
+        default=None
+    )
+    argparser.add_argument(
         "--maps_args",
         help="maps arguments to pass",
         nargs="+")
@@ -151,7 +157,7 @@ def main():
 
 maps {' '.join(args.maps_args)} &
 sleep 5
-pollmach gorun-atat-local {'--skip_relax' if args.skip_relax else ''} --kpoints={args.kpoints} --frac_tol={args.frac_tol} gorun --local --no_vasp_config
+pollmach gorun-atat-local {'--skip_relax' if args.skip_relax else ''} --kpoints={args.kpoints} --frac_tol={args.frac_tol} {'--sublattice_cutoff='+str(args.sublattice_cutoff) if args.sublattice_cutoff else ''} gorun --local --no_vasp_config
 """,
         config[server].get('shebang', "#!/usr/bin/bash"))
     with open('sub', 'w', encoding='utf-8') as f:
