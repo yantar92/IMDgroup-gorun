@@ -35,8 +35,8 @@ import warnings
 import ase.io.vasp
 from ase.calculators.vasp import Vasp
 from pymatgen.io.vasp.inputs import Incar
+from IMDgroup.pymatgen.io.vasp.vaspdir import IMDGVaspDir
 from xml.etree.ElementTree import ParseError
-from pymatgen.io.vasp.outputs import Vasprun
 
 
 def directory_contains_vasp_outputp(path):
@@ -65,11 +65,7 @@ def directory_converged_p(path):
                     if not directory_converged_p(dirpath):
                         return False
         else:
-            try:
-                run = Vasprun(os.path.join(path, 'vasprun.xml'))
-                if not run.converged:
-                    return False
-            except (ParseError, FileNotFoundError):
+            if not IMDGVaspDir(path).converged:
                 return False
         return True
     return False
