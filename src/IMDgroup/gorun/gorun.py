@@ -170,7 +170,9 @@ def main():
             "A job is already running in this directory. "
             "Exiting without submitting a new job.",
             "yellow"))
-        return 1
+        # This is useful to return normally here as
+        # the purpose of gorun is achieved.
+        return 0
 
     if not os.path.isfile('INCAR'):
         print(colored(
