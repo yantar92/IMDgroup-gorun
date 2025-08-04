@@ -95,6 +95,12 @@ gorun 2 24:00:00
         type=str,
         default=None)
     argparser.add_argument(
+        "--vasp",
+        help="Vasp executable to run (default: ncl)",
+        type=str,
+        choices=["ncl", "gam", "std"],
+        default="ncl")
+    argparser.add_argument(
         "--no_vasp_config",
         help="Whether to configure environment for VASP",
         action="store_true")
@@ -212,7 +218,7 @@ def main():
     base_script = f"""
 {config[server]['VASP-setup'] if not args.no_vasp_config else ""}
 
-{config[server].get('mpiexec', 'mpiexec')} {os.environ["VASP_PATH"]}/bin/vasp_ncl
+{config[server].get('mpiexec', 'mpiexec')} {os.environ["VASP_PATH"]}/bin/vasp_{args.vasp}
         """
     shebang = config[server].get('shebang', "#!/usr/bin/bash")
     if args.local:
