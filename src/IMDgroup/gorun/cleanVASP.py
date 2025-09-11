@@ -35,6 +35,7 @@ import warnings
 import ase.io.vasp
 from ase.calculators.vasp import Vasp
 from pymatgen.io.vasp.inputs import Incar
+from pymatgen.io.vasp.outputs import Potcar
 from IMDgroup.pymatgen.io.vasp.vaspdir import IMDGVaspDir
 from xml.etree.ElementTree import ParseError
 
@@ -176,7 +177,9 @@ def generate_potcar(path='.', keep_existing=False) -> None:
         calc_temp = Vasp(xc='PBE', setups={'base': 'recommended'})
         calc_temp.initialize(atoms)
         size_before = 0
+        prev_potcar = None
         if os.path.isfile(potcar_path):
+            prev_potcar = Potcar.from_file(potcar_path)
             size_before = os.path.getsize(potcar_path)
         calc_temp.write_potcar()
         # Sometimes, for initial/final NEB inputs, POTCAR is not written
@@ -186,6 +189,13 @@ def generate_potcar(path='.', keep_existing=False) -> None:
                 print(f'{path}: Generated POTCAR.')
             elif size_after != size_before:
                 print(f'{path}: Updated POTCAR.')
+                new_potcar = Potcar.from_file(potcar_path)
+                assert prev_potcar is not None
+                if prev_potcar.symbols != new_potcar.symbols:
+                    warnings.warn(
+                        f"Changed pseudopotentials from {prev_potcar.symbols}"
+                        f" to {new_potcar.symbols}"
+                    )
 
 
 def check_incar(path):
