@@ -181,6 +181,7 @@ def generate_potcar(path='.', keep_existing=False) -> None:
         if os.path.isfile(potcar_path):
             prev_potcar = Potcar.from_file(potcar_path)
             size_before = os.path.getsize(potcar_path)
+            shutil.copy2(potcar_path, potcar_path + '.old')
         calc_temp.write_potcar()
         # Sometimes, for initial/final NEB inputs, POTCAR is not written
         if os.path.isfile(potcar_path):
@@ -188,7 +189,7 @@ def generate_potcar(path='.', keep_existing=False) -> None:
             if size_before == 0:
                 print(f'{path}: Generated POTCAR.')
             elif size_after != size_before:
-                print(f'{path}: Updated POTCAR.')
+                print(f'{path}: Updated POTCAR.  (old POTCAR saved to POTCAR.old)')
                 new_potcar = Potcar.from_file(potcar_path)
                 assert prev_potcar is not None
                 if prev_potcar.symbols != new_potcar.symbols:
@@ -196,6 +197,8 @@ def generate_potcar(path='.', keep_existing=False) -> None:
                         f"Changed pseudopotentials from {prev_potcar.symbols}"
                         f" to {new_potcar.symbols}"
                     )
+            else:
+                os.unlink(potcar_path + '.old')
 
 
 def check_incar(path):
