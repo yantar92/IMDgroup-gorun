@@ -79,6 +79,11 @@ def get_args():
         default=0.5,
         help="Tolerance for distance between atoms to reject structures")
     argparser.add_argument(
+        "--max_strain",
+        default=0.1,
+        type=float,
+        help="Maximum strain allowed (default: 0.1)")
+    argparser.add_argument(
         "--skip_relax",
         help="Whether to skip relaxation run",
         action="store_true")
@@ -157,7 +162,7 @@ def main():
 
 maps {' '.join(args.maps_args)} &
 sleep 5
-pollmach gorun-atat-local {'--skip_relax' if args.skip_relax else ''} --kpoints={args.kpoints} --frac_tol={args.frac_tol} {'--sublattice_cutoff='+str(args.sublattice_cutoff) if args.sublattice_cutoff else ''} gorun --local --no_vasp_config
+pollmach gorun-atat-local {'--skip_relax' if args.skip_relax else ''} --kpoints={args.kpoints} --frac_tol={args.frac_tol} --max_strain={args.max_strain} {'--sublattice_cutoff='+str(args.sublattice_cutoff) if args.sublattice_cutoff else ''} gorun --local --no_vasp_config
 """,
         config[server].get('shebang', "#!/usr/bin/bash"))
     with open('sub', 'w', encoding='utf-8') as f:

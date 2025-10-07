@@ -63,6 +63,11 @@ def get_args():
         type=float,
         help="Distance tolerance to reject structure (default: 0 = no rejections)")
     parser.add_argument(
+        "--max_strain",
+        default=0.1,
+        type=float,
+        help="Maximum strain allowed (default: 0.1)")
+    parser.add_argument(
         "--skip_relax",
         help="Whether to skip relaxation run",
         action="store_true")
@@ -157,8 +162,8 @@ def main(args=None):
         vaspdir = IMDGVaspDir("ATAT")
         str_before = vaspdir.initial_structure
         str_after = vaspdir.structure
-        if not atat.check_volume_distortion(str_before, str_after):
-            print(colored("POSCAR->CONTCAR strain exceeds 10%", "red"))
+        if not atat.check_volume_distortion(str_before, str_after, args.max_strain):
+            print(colored(f"POSCAR->CONTCAR strain exceeds {args.max_strain*100}%", "red"))
             Path('error').touch()
             Path('error_strain').touch()
             return 1
