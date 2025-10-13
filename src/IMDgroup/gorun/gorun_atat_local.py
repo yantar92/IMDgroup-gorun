@@ -163,40 +163,46 @@ def main(args=None):
         vaspdir = IMDGVaspDir("ATAT")
         str_before = vaspdir.initial_structure
         str_after = vaspdir.structure
-        if not atat.check_volume_distortion(str_before, str_after, args.max_strain):
-            print(colored(f"POSCAR->CONTCAR strain exceeds {args.max_strain*100}%", "red"))
-            Path('error').touch()
-            Path('error_strain').touch()
-            return 1
-        sublattice = Structure.from_file('str.out')
-        if not atat.check_sublattice_flip(str_before, str_after, sublattice):
-            print(colored(
-                "POSCAR&CONTCAR flipped sublattice configuration.", "yellow"))
-            sublattice2 =\
-                atat.fit_sublattice_to_structure(sublattice, str_after)
-            if not Path('str.out.old').is_file():
-                Path('str.out').rename('str.out.old')
-                sublattice2.to_file('str.out', fmt='atat')
-                print(colored("Updating str.out", "yellow"))
-            else:
-                print(colored("str.out.old exists.  Not overwriting", "yellow"))
-            sublattice = sublattice2
-        str_after_normalized = str_after.copy()
-        str_after_normalized.lattice = sublattice.lattice
-        dist_sublattice = structure_distance(
-            str_after_normalized, sublattice,
-            # Compare specie-insensitively
-            match_first=True,
-            match_species=False)
-        Path("sublattice_deviation").write_text(
-            f"{dist_sublattice:.4f}\n", encoding='utf-8')
-        if args.sublattice_cutoff is not None:
-            if dist_sublattice >= args.sublattice_cutoff:
-                print(colored(
-                    f"Sublattice deviation {dist_sublattice:.2f} >= cutoff"
-                    f" {args.sublattice_cutoff:.2f}.  Marking as error", "red"))
+        try:
+            if not atat.check_volume_distortion(str_before, str_after, args.max_strain):
+                print(colored(f"POSCAR->CONTCAR strain exceeds {args.max_strain*100}%", "red"))
                 Path('error').touch()
-                Path('error_sublattice').touch()
+                Path('error_strain').touch()
+                return 1
+            sublattice = Structure.from_file('str.out')
+            if not atat.check_sublattice_flip(str_before, str_after, sublattice):
+                print(colored(
+                    "POSCAR&CONTCAR flipped sublattice configuration.", "yellow"))
+                sublattice2 =\
+                    atat.fit_sublattice_to_structure(sublattice, str_after)
+                if not Path('str.out.old').is_file():
+                    Path('str.out').rename('str.out.old')
+                    sublattice2.to_file('str.out', fmt='atat')
+                    print(colored("Updating str.out", "yellow"))
+                else:
+                    print(colored("str.out.old exists.  Not overwriting", "yellow"))
+                sublattice = sublattice2
+            str_after_normalized = str_after.copy()
+            str_after_normalized.lattice = sublattice.lattice
+            dist_sublattice = structure_distance(
+                str_after_normalized, sublattice,
+                # Compare specie-insensitively
+                match_first=True,
+                match_species=False)
+            Path("sublattice_deviation").write_text(
+                f"{dist_sublattice:.4f}\n", encoding='utf-8')
+            if args.sublattice_cutoff is not None:
+                if dist_sublattice >= args.sublattice_cutoff:
+                    print(colored(
+                        f"Sublattice deviation {dist_sublattice:.2f} >= cutoff"
+                        f" {args.sublattice_cutoff:.2f}.  Marking as error", "red"))
+                    Path('error').touch()
+                    Path('error_sublattice').touch()
+        except Exception as e:
+            print(f"Cought exception while comparing str.out and VASP output: {e}")
+            print("Continuing anyway, but marking with error")
+            Path('error').touch()
+            Path('error_structure').touch()
 
     if Path('ATAT.SCF').is_dir():
         print(colored("ATAT.SCF already exists.  Not modifying", "yellow"))
