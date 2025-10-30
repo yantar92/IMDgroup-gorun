@@ -238,7 +238,13 @@ def main():
             f.write(script)
 
     # Submit the job using sbatch.
-    if args.local:
+    if args.mark:
+        Path('gorun_ready').touch()
+        print(colored(
+            'Created "gorun_ready" file.'
+            '  Invoke "sbatch sub" to submit manually.',
+            "green"))
+    elif args.local:
         with open("vasp.out", "a", encoding='utf-8') as f:
             subprocess.run(
                 script,
@@ -250,12 +256,6 @@ def main():
             )
         # os.system("bash sub > vasp.out 2>&1")
         print(colored('Running job locally...', "green"))
-    elif args.mark:
-        Path('gorun_ready').touch()
-        print(colored(
-            'Created "gorun_ready" file.'
-            '  Invoke "sbatch sub" to submit manually.',
-            "green"))
     else:
         os.system("sbatch sub")
         print(colored('Job submitted to SLURM scheduler.', "green"))
