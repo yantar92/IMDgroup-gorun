@@ -36,6 +36,7 @@ import datetime
 import time
 import subprocess
 import glob
+from pathlib import Path
 from termcolor import colored
 from IMDgroup.gorun.slurm import\
     (barf_if_no_cmd, directory_queued_p,
@@ -107,6 +108,11 @@ gorun 2 24:00:00
     argparser.add_argument(
         "--local",
         help="Whether to run locally (do not use sbatch)",
+        action="store_true")
+    argparser.add_argument(
+        "--mark",
+        help="When set, do not invoke sbatch sub at the end,"
+        " just check and create 'gorun_ready' file",
         action="store_true")
     argparser.add_argument(
         "--force",
@@ -244,6 +250,12 @@ def main():
             )
         # os.system("bash sub > vasp.out 2>&1")
         print(colored('Running job locally...', "green"))
+    elif args.mark:
+        Path('gorun_ready').touch()
+        print(colored(
+            'Created "gorun_ready" file.'
+            '  Invoke "sbatch sub" to submit manually.',
+            "green"))
     else:
         os.system("sbatch sub")
         print(colored('Job submitted to SLURM scheduler.', "green"))
