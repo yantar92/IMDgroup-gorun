@@ -257,6 +257,9 @@ def main():
         # os.system("bash sub > vasp.out 2>&1")
         print(colored('Running job locally...', "green"))
     else:
-        os.system("sbatch sub")
-        print(colored('Job submitted to SLURM scheduler.', "green"))
+        status = os.WEXITSTATUS(os.system("sbatch sub"))
+        if status == 0:
+            print(colored('Job submitted to SLURM scheduler.', "green"))
+        else:
+            print(colored('Failed to submit to SLURM scheduler.', "red"))
     return 0
