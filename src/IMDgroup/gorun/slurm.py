@@ -128,7 +128,7 @@ def sbatch_estimate_start(script: str):
                 now_time_str = subprocess.check_output(
                     "date +%Y-%m-%dT%H:%M:%S", shell=True).decode('utf-8').strip()
                 now_time = dateutil.parser.isoparse(now_time_str)
-                return (now_time - now_time, ncpus)
+                return (now_time - now_time, 1)
             print("Failed to execute sbatch in test mode:")
             print(e.output)
             print(f"Script:\n-----\n{script}\n-----\n")
