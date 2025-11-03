@@ -151,6 +151,9 @@ def backup_current_dir(to: str) -> None:
     """
     barf_if_no_cmd('rsync')
     print(f"Backing up {os.getcwd()}")
+    if Path('gorun_ready').is_file():
+        print("Found gorun_ready. Deleting")
+        Path('gorun_ready').unlink()
     subprocess.check_call(f"rsync -q * './{to}'", shell=True)
     if nebp('.'):
         print("Detected NEB-like input")
