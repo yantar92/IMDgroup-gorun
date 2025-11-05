@@ -179,6 +179,15 @@ def main():
             "red"))
         return 1
 
+    if Path('gorun_ready').is_file() and not args.force:
+        print(colored(
+            "gorun_ready file present. "
+            "Exiting without submitting a new job.",
+            "yellow"))
+        # This is useful to return normally here as
+        # the purpose of gorun is achieved.
+        return 0
+
     working_dir = os.getcwd()
     if directory_queued_p(working_dir) and not args.force:
         print(colored(
