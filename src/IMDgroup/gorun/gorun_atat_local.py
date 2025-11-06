@@ -109,7 +109,7 @@ def run_vasp(vasp_command, directory):
         Path('error').touch()
         Path('error_unconverged').touch()
         return False
-    if not vaspdir.converged:
+    if not existing_vaspdir.converged_sequence:
         return False
     if vaspdir['vasprun.xml'] is None:
         return False
