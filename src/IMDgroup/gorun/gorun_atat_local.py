@@ -103,8 +103,9 @@ def run_vasp(vasp_command, directory):
     )
     vaspdir = IMDGVaspDir(Path(directory))
     if result.returncode != 0 or\
-       not (vaspdir.converged_electronic
-            and vaspdir.converged_ionic):
+       (vaspdir['OSZICAR'] and  # exists
+        not (vaspdir.converged_electronic
+             and vaspdir.converged_ionic)):
         Path('error').touch()
         Path('error_unconverged').touch()
         return False
