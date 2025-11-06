@@ -108,7 +108,7 @@ def run_vasp(vasp_command, directory):
         run = 'failed'
     except FileNotFoundError:
         run = None
-    if result.returncode != 0 or run == 'failed' or (run is not None and not vaspdir.converged):
+    if result.returncode != 0 or run == 'failed' or (run is not None and not vaspdir.converged_electronic or vaspdir.convered_ionic):
         Path('error').touch()
         Path('error_unconverged').touch()
         return False
