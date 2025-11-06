@@ -59,16 +59,8 @@ def directory_converged_p(path):
     """Return True when PATH contains converged VASP output.
     """
     if directory_contains_vasp_outputp(path):
-        if nebp(path):
-            for dirname in os.listdir(path):
-                dirpath = os.path.join(path, dirname)
-                if os.path.isdir(dirpath) and re.match(r'[0-9]+', dirname):
-                    if not directory_converged_p(dirpath):
-                        return False
-        else:
-            if not IMDGVaspDir(path).converged:
-                return False
-        return True
+        vaspdir = IMDGVaspDir(path)
+        return vaspdir.converged_electronic and vaspdir.converged_ionic
     return False
 
 

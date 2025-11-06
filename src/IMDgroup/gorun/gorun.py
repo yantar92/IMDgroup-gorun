@@ -64,12 +64,15 @@ def get_args():
     argparser = argparse\
         .ArgumentParser(
             description="""Queue VASP run for current directory
-Do nothing when VASP run is already queued for the current directory.
+Do nothing when VASP run is already queued or convrged for the current directory.
 Also,
 1. Make sure that vdw_kernel.bindat is copied over from VASP source dir
 2. If CONTCAR is present, copy it over to POSCAR
 3. Generate POTCAR file
 4. Backup old VASP files and slurm logs
+
+Also, when current dir contains INCAR.0, ICNAR.1, ... files
+and the run is converged, replace INCAR with the first INCAR.X, and re-run.
 
 Slurm script will be saved under name 'sub'.""",
             epilog="""Example:
@@ -205,12 +208,20 @@ def main():
             "yellow"))
         return 1
 
+    extra_incars = None
     if not mdp('.') and directory_converged_p('.') and not args.force:
-        print(colored(
-            'VASP run already converged. '
-            'Exiting without submitting a new job.',
-            "yellow"))
-        return 1
+        extra_incars = sorted(list(Path('.').glob(r"INCAR\.[0-9]+")))
+        if len(extra_incars) > 0:
+            print(colored(
+                f"Converged, but found additional INCARs: {extra_incars}"
+                f" Replacing INCAR with {extra_incars[0]}",
+                "yellow"))
+        else:
+            print(colored(
+                'VASP run already converged. '
+                'Exiting without submitting a new job.',
+                "yellow"))
+            return 1
 
     if args.max_slurm_jobs > 0:
         while user_job_count() >= args.max_slurm_jobs:
@@ -220,6 +231,10 @@ def main():
     if directory_contains_vasp_outputp('.'):
         run_folder = get_next_run_folder()
         backup_current_dir(run_folder)
+
+    if extra_incars is not None:
+        Path('INCAR').rename('INCAR.old')
+        extra_incars[0].rename('INCAR')
 
     prepare_vasp_dir('.', args.keep_potcar)
     if nebp('.'):
