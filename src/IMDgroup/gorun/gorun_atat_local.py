@@ -45,7 +45,6 @@ from IMDgroup.pymatgen.core.structure import structure_is_valid2
 import IMDgroup.pymatgen.io.atat as atat
 from pymatgen.io.vasp.outputs import Vasprun
 from IMDgroup.pymatgen.core.structure import IMDStructure as Structure, structure_distance
-from IMDgroup.gorun.cleanVASP import directory_converged_p
 from IMDgroup.pymatgen.io.vasp.vaspdir import IMDGVaspDir
 
 
@@ -90,7 +89,8 @@ def run_vasp(vasp_command, directory):
     Return Vasprun object if VASP succeeds and converges and False
     otherwise.
     """
-    if directory_converged_p(directory):
+    vaspdir = IMDGVaspDir(Path(directory))
+    if vaspdir.converged:
         print(f"{directory} already contains converged output. Not running VASP")
         return Vasprun(Path(directory) / "vasprun.xml")
 
@@ -113,6 +113,8 @@ def run_vasp(vasp_command, directory):
         not (vaspdir.converged_electronic and vaspdir.convered_ionic)):
         Path('error').touch()
         Path('error_unconverged').touch()
+        return False
+    if not vaspdir.converged:
         return False
     if run is None:
         return False
