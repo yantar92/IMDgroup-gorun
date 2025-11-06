@@ -89,8 +89,8 @@ def run_vasp(vasp_command, directory):
     Return Vasprun object if VASP succeeds and converges and False
     otherwise.
     """
-    vaspdir = IMDGVaspDir(Path(directory))
-    if vaspdir.converged:
+    existing_vaspdir = IMDGVaspDir(Path(directory))
+    if existing_vaspdir.converged:
         print(f"{directory} already contains converged output. Not running VASP")
         return Vasprun(Path(directory) / "vasprun.xml")
 
@@ -101,24 +101,18 @@ def run_vasp(vasp_command, directory):
         cwd=directory,
         check=False,
     )
-    try:
-        run = Vasprun(Path(directory) / "vasprun.xml")
-        vaspdir = IMDGVaspDir(Path(directory))
-    except (ValueError, ParseError):
-        run = 'failed'
-    except FileNotFoundError:
-        run = None
-    if result.returncode != 0 or run == 'failed' or\
-       (run is not None and\
-        not (vaspdir.converged_electronic and vaspdir.converged_ionic)):
+    vaspdir = IMDGVaspDir(Path(directory))
+    if result.returncode != 0 or\
+       not (vaspdir.converged_electronic
+            and vaspdir.converged_ionic):
         Path('error').touch()
         Path('error_unconverged').touch()
         return False
     if not vaspdir.converged:
         return False
-    if run is None:
+    if vaspdir['vasprun.xml'] is None:
         return False
-    return run
+    return vaspdir['vasprun.xml']
 
 
 def main(args=None):
