@@ -210,7 +210,7 @@ def main():
 
     extra_incars = None
     if not mdp('.') and directory_converged_p('.') and not args.force:
-        extra_incars = sorted(list(Path('.').glob(r"INCAR\.[0-9]+")))
+        extra_incars = sorted(list(Path('.').glob(r"INCAR\.[0-9]*")))
         if len(extra_incars) > 0:
             print(colored(
                 f"Converged, but found additional INCARs: {extra_incars}"
