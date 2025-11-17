@@ -211,7 +211,8 @@ def prepare_vasp_dir(path='.', keep_potcar=False, keep_poscar=False) -> None:
     """
     check_incar(path)
     # If CONTCAR exists and is non-empty, copy it to POSCAR.
-    contcar_to_poscar(path)
+    if not keep_poscar:
+        contcar_to_poscar(path)
     # Clean the POSCAR, INCAR, and KPOINTS files before running the job.
     clean_vasp_inputs(path)
     # If POSCAR exists, initialize ASE and generate the POTCAR file.
