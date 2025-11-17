@@ -270,6 +270,9 @@ def main():
                 clear_slurm_logs(dirname)
 
     if not args.no_incar_py and Path('INCAR.py').is_file():
+        print(colored(
+           "Found INCAR.py.  Using instead of directly running VASP.",
+           "yellow"))
         base_script = f"""
         {config[server]['VASP-setup'] if not args.no_vasp_config else ""}
         export VASP_COMMAND="gorun --local --no_incar_py"
