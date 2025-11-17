@@ -255,7 +255,7 @@ def main():
                 "yellow"))
             return 1
 
-    if args.max_slurm_jobs > 0:
+    if args.max_slurm_jobs > 0 and not args.local:
         while user_job_count() >= args.max_slurm_jobs:
             print("Waiting for submitted jobs to finish")
             time.sleep(10)
