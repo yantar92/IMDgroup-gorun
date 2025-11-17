@@ -273,21 +273,16 @@ def main():
         print(colored(
            "Found INCAR.py.  Using instead of directly running VASP.",
            "yellow"))
-        base_script = f"""
-        {config[server]['VASP-setup'] if not args.no_vasp_config else ""}
-        export VASP_COMMAND="gorun --local --no_incar_py"
-        python <<<EOF
-        {PYTHON_HEADER}
-        $(cat INCAR.py)
-        EOF
-        """
+        base_script = f"""{config[server]['VASP-setup'] if not args.no_vasp_config else ""}"""\
+            '\nexport VASP_COMMAND="gorun --local --no_incar_py"'\
+            "\npython <<<EOF"\
+            f"\n{PYTHON_HEADER}"\
+            "\n$(cat INCAR.py)"\
+            "\nEOF"
     else:
-        base_script = f"""
-        {config[server]['VASP-setup'] if not args.no_vasp_config else ""}
-        export VASP_COMMAND="{config[server].get('mpiexec', 'mpiexec')} {os.environ["VASP_PATH"]}/bin/vasp_{args.vasp}"
-
-        $VASP_COMMAND
-        """
+        base_script = f"""{config[server]['VASP-setup'] if not args.no_vasp_config else ""}"""\
+            f'''\nexport VASP_COMMAND="{config[server].get('mpiexec', 'mpiexec')} {os.environ["VASP_PATH"]}/bin/vasp_{args.vasp}"'''\
+            "\n$VASP_COMMAND"
     shebang = config[server].get('shebang', "#!/usr/bin/bash")
     if args.local:
         script = f"{shebang}\n{base_script}"
