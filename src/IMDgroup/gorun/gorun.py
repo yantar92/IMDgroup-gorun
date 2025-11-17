@@ -70,7 +70,7 @@ def custom_write_potcar(self, suffix="", directory='.'):
 
 # POSCAR can be a copy of CONTCAR as needed
 atoms = ase_read('POSCAR', format="vasp")
-calc=Vasp(directory='.', atoms=atoms)
+calc=Vasp(directory='.', atoms=atoms, txt='-')
 
 # Replace the method on this instance
 calc.write_potcar = custom_write_potcar.__get__(calc, type(calc))
