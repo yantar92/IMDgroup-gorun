@@ -295,8 +295,8 @@ def main():
         print(colored(
            "Found INCAR.py.  Using instead of directly running VASP.",
            "yellow"))
+        # ASE handles POSCAR itself in scripts. Do not step over it.
         base_script = f"""{config[server]['VASP-setup'] if not args.no_vasp_config else ""}"""\
-            # ASE handles POSCAR itself in scripts. Do not step over it.
             '\nexport VASP_COMMAND="gorun --local --no_incar_py --force --no_clean --keep_poscar"'\
             "\npython <<EOF"\
             f"\n{PYTHON_HEADER}"\
