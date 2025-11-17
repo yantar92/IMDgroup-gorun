@@ -202,10 +202,12 @@ def check_incar(path):
         incar.check_params()
 
 
-def prepare_vasp_dir(path='.', keep_potcar=False) -> None:
+def prepare_vasp_dir(path='.', keep_potcar=False, keep_poscar=False) -> None:
     """Prepare and cleanup VASP inputs in PATH.
     When KEEP_POTCAR is True, and POTCAR file already exist do not
     re-generate it.
+    When KEEP_POSCAR is True, keep POSCAR file and do not overwrite it
+    with CONTCAR, even if CONTCAR is present.
     """
     check_incar(path)
     # If CONTCAR exists and is non-empty, copy it to POSCAR.

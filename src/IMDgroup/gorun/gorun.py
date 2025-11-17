@@ -160,6 +160,10 @@ gorun 2 24:00:00
         help="When POTCAR is already present, do not re-generate it",
         action="store_true")
     argparser.add_argument(
+        "--keep_poscar",
+        help="When CONTCAR is present, do not copy it to POSCAR",
+        action="store_true")
+    argparser.add_argument(
         "--no_clean",
         help="Do not clean the dir after backing up.",
         action="store_true")
@@ -274,11 +278,11 @@ def main():
         Path('INCAR').rename('INCAR.old')
         extra_incars[0].rename('INCAR')
 
-    prepare_vasp_dir('.', args.keep_potcar)
+    prepare_vasp_dir('.', args.keep_potcar, args.keep_poscar)
     if nebp('.'):
         for dirname in sorted(os.listdir('.')):
             if os.path.isdir(dirname) and re.match(r'[0-9]+', dirname):
-                prepare_vasp_dir(dirname)
+                prepare_vasp_dir(dirname, args.keep_potcar, args.keep_poscar)
 
     if not args.no_clean:
         clear_slurm_logs('.')
@@ -292,7 +296,8 @@ def main():
            "Found INCAR.py.  Using instead of directly running VASP.",
            "yellow"))
         base_script = f"""{config[server]['VASP-setup'] if not args.no_vasp_config else ""}"""\
-            '\nexport VASP_COMMAND="gorun --local --no_incar_py --force --no_clean"'\
+            # ASE handles POSCAR itself in scripts. Do not step over it.
+            '\nexport VASP_COMMAND="gorun --local --no_incar_py --force --no_clean --keep_poscar"'\
             "\npython <<EOF"\
             f"\n{PYTHON_HEADER}"\
             "\n$(cat INCAR.py)"\
