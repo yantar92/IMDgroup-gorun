@@ -32,7 +32,6 @@ import sys
 import re
 import warnings
 import argparse
-import datetime
 import time
 import subprocess
 import glob
@@ -187,8 +186,7 @@ def get_next_run_folder() -> str:
                    for folder in existing_folders
                    if folder.split('_')[1].isdigit()]
     next_run_number = max(run_numbers) + 1 if run_numbers else 1
-    return f"{prefix}_{next_run_number}_" +\
-        datetime.datetime.now().strftime("%Y_%m_%dT%H_%M_%S")
+    return f"{prefix}_{next_run_number}"
 
 
 def backup_current_dir(to: str) -> None:
