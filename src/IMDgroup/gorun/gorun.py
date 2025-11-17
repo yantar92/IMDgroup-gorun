@@ -275,7 +275,7 @@ def main():
            "Found INCAR.py.  Using instead of directly running VASP.",
            "yellow"))
         base_script = f"""{config[server]['VASP-setup'] if not args.no_vasp_config else ""}"""\
-            '\nexport VASP_COMMAND="gorun --local --no_incar_py"'\
+            '\nexport VASP_COMMAND="gorun --local --no_incar_py --force"'\
             "\npython <<<EOF"\
             f"\n{PYTHON_HEADER}"\
             "\n$(cat INCAR.py)"\
