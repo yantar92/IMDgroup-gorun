@@ -94,7 +94,7 @@ Also,
 1. Make sure that vdw_kernel.bindat is copied over from VASP source dir
 2. If CONTCAR is present, copy it over to POSCAR
 3. Generate POTCAR file
-4. Backup old VASP files and slurm logs
+4. Backup old VASP files and slurm logs (except WAVECAR)
 
 Also, when current dir contains INCAR.0, ICNAR.1, ... files
 and the run is converged, replace INCAR with the first INCAR.X, and re-run.
@@ -198,6 +198,10 @@ def backup_current_dir(to: str) -> None:
         print("Found gorun_ready. Deleting")
         Path('gorun_ready').unlink()
     subprocess.check_call(f"rsync -q * './{to}'", shell=True)
+    # Do not keep WAVECAR in the backup.
+    wavecar = Path(to) / "WAVECAR"
+    if wavecar.is_file() and wavecar.stat().st_size > 0:
+        wavecar.unlink()
     if nebp('.'):
         print("Detected NEB-like input")
         for dirname in os.listdir('.'):
