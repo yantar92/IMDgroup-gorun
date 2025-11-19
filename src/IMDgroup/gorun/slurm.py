@@ -98,6 +98,7 @@ def sbatch_script(shebang, args: dict[str, str], script: str) -> str:
     """
     sbatch_lines = [f'#SBATCH --{arg}="{value}"' for arg, value in args.items()]
     return f"""{shebang}
+"#SBATCH --signal=B:USR1@300"
 {"\n".join(sbatch_lines)}
 {script}
 """
