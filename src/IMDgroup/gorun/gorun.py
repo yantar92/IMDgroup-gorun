@@ -357,18 +357,9 @@ kill $monitor_pid 2>/dev/null
         # os.system("bash sub > vasp.out 2>&1")
         print(colored('Running job locally...', "green"))
     else:
-        # status = os.WEXITSTATUS(os.system("sbatch sub"))
-        try:
-            job_id = subprocess.check_output(
-                "sbatch sub | awk '{print $NF}'",
-                shell=True, text=True)
-            os.system(
-                "sbatch --job-name=clean -t 00:02:00 -c 1 --output=/dev/null"
-                + " ".join(f"--{arg}={val}" for arg, val in get_sbatch_args(
-                    args, config, server, queues[0]).items())
-                + f" --dependency=afterany:${job_id}"
-                + " --wrap='rm -f RUNNING'")
+        status = os.WEXITSTATUS(os.system("sbatch sub"))
+        if status == 0:
             print(colored('Job submitted to SLURM scheduler.', "green"))
-        except subprocess.CalledProcessError:
+        else:
             print(colored('Failed to submit to SLURM scheduler.', "red"))
     return 0
