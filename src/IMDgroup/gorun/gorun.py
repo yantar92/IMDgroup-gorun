@@ -95,6 +95,7 @@ Also,
 2. If CONTCAR is present, copy it over to POSCAR
 3. Generate POTCAR file
 4. Backup old VASP files and slurm logs (except WAVECAR)
+5. Arrange RUNNING file to be present for the duration of the run.
 
 Also, when current dir contains INCAR.0, ICNAR.1, ... files
 and the run is converged, replace INCAR with the first INCAR.X, and re-run.
@@ -236,7 +237,8 @@ def main():
         return 0
 
     working_dir = os.getcwd()
-    if directory_queued_p(working_dir) and not args.force:
+    if not args.force and (
+            Path('RUNNING').is_file() or directory_queued_p(working_dir)):
         print(colored(
             "A job is already running in this directory. "
             "Exiting without submitting a new job.",
@@ -293,6 +295,16 @@ def main():
                 if os.path.isdir(dirname) and re.match(r'[0-9]+', dirname):
                     clear_slurm_logs(dirname)
 
+    SLURM_CLEANUP_SETUP = """cleanup(){ rm -f RUNNING; }
+touch "RUNNING"
+# start a background monitor that will delete the flag when the parent dies
+{ while ps -o pid= -p $$ >/dev/null 2>&1; do sleep 30; done; cleanup; } &
+monitor_pid=$!
+    """
+    SLURM_CLEANUP_EPILOGUE = """cleanup
+kill $monitor_pid 2>/dev/null
+    """
+
     if not args.no_incar_py and Path('INCAR.py').is_file():
         print(colored(
            "Found INCAR.py.  Using instead of directly running VASP.",
@@ -300,14 +312,20 @@ def main():
         # ASE handles POSCAR itself in scripts. Do not step over it.
         base_script = f"""{config[server]['VASP-setup'] if not args.no_vasp_config else ""}"""\
             '\nexport VASP_COMMAND="gorun --local --no_incar_py --force --no_clean --keep_poscar"'\
+            f"\n{SLURM_CLEANUP_SETUP}"\
             "\npython <<EOF"\
             f"\n{PYTHON_HEADER}"\
             "\n$(cat INCAR.py)"\
-            "\nEOF"
+            "\nEOF"\
+            f"\n{SLURM_CLEANUP_EPILOGUE}"\
+            "\nexit 0"
     else:
         base_script = f"""{config[server]['VASP-setup'] if not args.no_vasp_config else ""}"""\
             f'''\nexport VASP_COMMAND="{config[server].get('mpiexec', 'mpiexec')} {os.environ["VASP_PATH"]}/bin/vasp_{args.vasp}"'''\
-            "\n$VASP_COMMAND"
+            f"\n{SLURM_CLEANUP_SETUP}"\
+            "\n$VASP_COMMAND"\
+            f"\n{SLURM_CLEANUP_EPILOGUE}"\
+            "\nexit 0"
     shebang = config[server].get('shebang', "#!/usr/bin/bash")
     if args.local:
         script = f"{shebang}\n{base_script}"
