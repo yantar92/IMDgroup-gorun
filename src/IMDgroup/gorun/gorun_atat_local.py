@@ -125,6 +125,7 @@ def main(args=None):
         # Generate VASP input
         args.atat_structure = "str.out"
         args.input_directory = "../"
+        args.inherit_prev_incarpy = True
         inputset_data = derive_atat(args)
         assert len(inputset_data['inputsets']) == 1
         inputset = inputset_data['inputsets'][0]
