@@ -359,7 +359,9 @@ kill $monitor_pid 2>/dev/null
     else:
         # status = os.WEXITSTATUS(os.system("sbatch sub"))
         try:
-            job_id = subprocess.check_output("sbatch sub", shell=True, text=True)
+            job_id = subprocess.check_output(
+                "sbatch sub | awk '{print $NF}",
+                shell=True, text=True)
             os.system(
                 "sbatch --job-name=clean -t 00:02:00 -c 1 --output=/dev/null"
                 + " ".join(f"--{arg}={val}" for arg, val in get_sbatch_args(
