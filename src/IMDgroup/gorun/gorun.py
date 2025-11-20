@@ -246,6 +246,8 @@ def main():
         # This is useful to return normally here as
         # the purpose of gorun is achieved.
         return 0
+    elif Path('RUNNING').is_file():
+        Path('RUNNING').unlink()
 
     if not os.path.isfile('INCAR'):
         print(colored(
