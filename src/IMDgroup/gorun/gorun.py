@@ -58,6 +58,7 @@ def _showwarning(message, category, _filename, _lineno, file=None, _line=None):
 warnings.showwarning = _showwarning
 
 PYTHON_HEADER = """
+from pathlib import Path
 from ase.calculators.vasp import Vasp
 from ase.io import read as ase_read
 from IMDgroup.gorun.cleanVASP import generate_potcar
@@ -81,6 +82,13 @@ calc.read_kpoints('KPOINTS')
 # POSCAR can be a copy of CONTCAR as needed
 atoms = ase_read('POSCAR', format="vasp")
 atoms.calc = calc
+
+# Mark UNCONVERGED
+Path("UNCONVERGED").touch()
+"""
+
+PYTHON_FINALIZER = """
+Path("UNCONVERGED").unlink()
 """
 
 
@@ -104,6 +112,7 @@ When there is INCAR.py file, do not run VASP directly. Instead,
 run VASP via ASE as the following:
 {PYTHON_HEADER}
 # <INCAR.py contents inserted here and can access atoms variable with calculator all set>
+{PYTHON_FINALIZER}
 Srlurm script will be saved under name 'sub'.""",
             epilog="""Example:
 gorun 2 24:00:00
@@ -318,6 +327,7 @@ kill $monitor_pid 2>/dev/null
             "\npython <<EOF"\
             f"\n{PYTHON_HEADER}"\
             "\n$(cat INCAR.py)"\
+            f"\n{PYTHON_FINALIZER}"\
             "\nEOF"\
             f"\n{SLURM_CLEANUP_EPILOGUE}"\
             "\nexit 0"

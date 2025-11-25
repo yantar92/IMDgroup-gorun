@@ -60,7 +60,8 @@ def directory_converged_p(path):
     """
     if directory_contains_vasp_outputp(path):
         vaspdir = IMDGVaspDir(path)
-        return vaspdir.converged_electronic and vaspdir.converged_ionic
+        return vaspdir.converged_electronic and vaspdir.converged_ionic\
+            and vaspdir.converged_manual
     return False
 
 
