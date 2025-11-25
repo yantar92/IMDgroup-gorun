@@ -35,8 +35,10 @@ import argparse
 import time
 import subprocess
 import glob
+import tarfile
 from pathlib import Path
 from termcolor import colored
+from monty.io import zopen
 from IMDgroup.gorun.slurm import\
     (barf_if_no_cmd, directory_queued_p,
      clear_slurm_logs, get_best_script, user_job_count)
@@ -186,17 +188,27 @@ gorun 2 24:00:00
     return argparser.parse_args()
 
 
+GORUN_BACKUP_PREFIX = "gorun"
+
+
+def get_last_run_number() -> int | None:
+    """Get the last used 'gorun_NN' folder number."""
+    existing_folders = glob.glob(GORUN_BACKUP_PREFIX + "_*")
+    # Extract numeric parts from folder names
+    # and find the last used number
+    run_numbers = [int(folder.split('_')[1].split('.')[0])
+                   for folder in existing_folders
+                   if folder.split('_')[1].split('.')[0].isdigit()]
+    return max(run_numbers) if run_numbers else None
+
+
 def get_next_run_folder() -> str:
     """Get the next available 'gorun_*' folder name."""
-    prefix = 'gorun'
-    existing_folders = glob.glob(prefix + "_*")
-    # Extract numeric parts from folder names
-    # and find the next available number
-    run_numbers = [int(folder.split('_')[1])
-                   for folder in existing_folders
-                   if folder.split('_')[1].isdigit()]
-    next_run_number = max(run_numbers) + 1 if run_numbers else 1
-    return f"{prefix}_{next_run_number}"
+    if last_number := get_last_run_number():
+        next_run_number = last_number + 1
+    else:
+        next_run_number = 1
+    return f"{GORUN_BACKUP_PREFIX}_{next_run_number}"
 
 
 def backup_current_dir(to: str) -> None:
@@ -217,6 +229,13 @@ def backup_current_dir(to: str) -> None:
         for dirname in os.listdir('.'):
             if os.path.isdir(dirname) and re.match(r'[0-9]+', dirname):
                 subprocess.check_call(f"rsync -qr {dirname} './{to}'", shell=True)
+    if previous_dir_num := get_last_run_number():
+        previous_dir = f"{GORUN_BACKUP_PREFIX}_{previous_dir_num}"
+        if previous_dir_num != 1 and Path(previous_dir).is_dir():
+            print(f"Compressing previous run: {previous_dir}")
+            with zopen(f"{previous_dir}.tar.gz", "wb") as f_out:
+                with tarfile.open(mode="w:gz", fileobj=f_out) as tar:
+                    tar.add(previous_dir, arcname=".")
 
 
 def main():
