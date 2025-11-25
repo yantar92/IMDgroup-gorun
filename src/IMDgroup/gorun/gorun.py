@@ -34,6 +34,7 @@ import warnings
 import argparse
 import time
 import subprocess
+import shutil
 import glob
 import tarfile
 from pathlib import Path
@@ -223,6 +224,7 @@ def backup_current_dir(to: str) -> None:
             with zopen(f"{previous_dir}.tar.gz", "wb") as f_out:
                 with tarfile.open(mode="w:gz", fileobj=f_out) as tar:
                     tar.add(previous_dir, arcname=".")
+                    shutil.rmtree(previous_dir)
     if Path('gorun_ready').is_file():
         print("Found gorun_ready. Deleting")
         Path('gorun_ready').unlink()
