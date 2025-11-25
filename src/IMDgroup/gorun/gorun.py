@@ -229,7 +229,7 @@ def backup_current_dir(to: str) -> None:
         print("Found gorun_ready. Deleting")
         Path('gorun_ready').unlink()
     subprocess.check_call(
-        f"rsync -av --exclude '*.tar.gz' --exclude 'gorun_*'  ./ './{to}'",
+        f"rsync -avq --exclude '*.tar.gz' --exclude 'gorun_*'  ./ './{to}'",
         shell=True)
     # Do not keep WAVECAR in the backup.
     wavecar = Path(to) / "WAVECAR"
