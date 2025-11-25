@@ -111,6 +111,8 @@ def run_vasp(vasp_command, directory):
         return False
     if not existing_vaspdir.converged_sequence:
         return False
+    if not existing_vaspdir.converged_manual:
+        return False
     if vaspdir['vasprun.xml'] is None:
         return False
     return vaspdir['vasprun.xml']
