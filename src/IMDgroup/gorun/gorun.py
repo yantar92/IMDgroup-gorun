@@ -216,6 +216,13 @@ def backup_current_dir(to: str) -> None:
     """
     barf_if_no_cmd('rsync')
     print(f"Backing up {os.getcwd()}")
+    if previous_dir_num := get_last_run_number():
+        previous_dir = f"{GORUN_BACKUP_PREFIX}_{previous_dir_num}"
+        if previous_dir_num != 1 and Path(previous_dir).is_dir():
+            print(f"Compressing previous run: {previous_dir}")
+            with zopen(f"{previous_dir}.tar.gz", "wb") as f_out:
+                with tarfile.open(mode="w:gz", fileobj=f_out) as tar:
+                    tar.add(previous_dir, arcname=".")
     if Path('gorun_ready').is_file():
         print("Found gorun_ready. Deleting")
         Path('gorun_ready').unlink()
@@ -229,13 +236,6 @@ def backup_current_dir(to: str) -> None:
         for dirname in os.listdir('.'):
             if os.path.isdir(dirname) and re.match(r'[0-9]+', dirname):
                 subprocess.check_call(f"rsync -qr {dirname} './{to}'", shell=True)
-    if previous_dir_num := get_last_run_number():
-        previous_dir = f"{GORUN_BACKUP_PREFIX}_{previous_dir_num}"
-        if previous_dir_num != 1 and Path(previous_dir).is_dir():
-            print(f"Compressing previous run: {previous_dir}")
-            with zopen(f"{previous_dir}.tar.gz", "wb") as f_out:
-                with tarfile.open(mode="w:gz", fileobj=f_out) as tar:
-                    tar.add(previous_dir, arcname=".")
 
 
 def main():
