@@ -217,18 +217,20 @@ def backup_current_dir(to: str) -> None:
     """
     barf_if_no_cmd('rsync')
     print(f"Backing up {os.getcwd()}")
-    # if previous_dir_num := get_last_run_number():
-    #     previous_dir = f"{GORUN_BACKUP_PREFIX}_{previous_dir_num}"
-    #     if previous_dir_num != 1 and Path(previous_dir).is_dir():
-    #         print(f"Compressing previous run: {previous_dir}")
-    #         with zopen(f"{previous_dir}.tar.gz", "wb") as f_out:
-    #             with tarfile.open(mode="w:gz", fileobj=f_out) as tar:
-    #                 tar.add(previous_dir)
-    #                 shutil.rmtree(previous_dir)
+    if previous_dir_num := get_last_run_number():
+        previous_dir = f"{GORUN_BACKUP_PREFIX}_{previous_dir_num}"
+        if previous_dir_num != 1 and Path(previous_dir).is_dir():
+            print(f"Compressing previous run: {previous_dir}")
+            with zopen(f"{previous_dir}.tar.gz", "wb") as f_out:
+                with tarfile.open(mode="w:gz", fileobj=f_out) as tar:
+                    tar.add(previous_dir)
+                    shutil.rmtree(previous_dir)
     if Path('gorun_ready').is_file():
         print("Found gorun_ready. Deleting")
         Path('gorun_ready').unlink()
-    subprocess.check_call(f"rsync -q * './{to}'", shell=True)
+    subprocess.check_call(
+        f"rsync -av --exclude '*.tar.gz' --exclude 'gorun_*'  ./ './{to}'",
+        shell=True)
     # Do not keep WAVECAR in the backup.
     wavecar = Path(to) / "WAVECAR"
     if wavecar.is_file() and wavecar.stat().st_size > 0:
