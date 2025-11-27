@@ -45,7 +45,7 @@ from IMDgroup.gorun.slurm import\
      clear_slurm_logs, get_best_script, user_job_count)
 from IMDgroup.gorun.cleanVASP import\
     (prepare_vasp_dir, nebp, mdp, directory_converged_p,
-     directory_contains_vasp_outputp)
+     directory_contains_vasp_outputp, clear_useless_vasp_files)
 from IMDgroup.gorun.sbatch import\
     (barf_if_no_env, get_config, current_server, get_sbatch_args)
 
@@ -309,6 +309,7 @@ def main():
             time.sleep(10)
 
     if directory_contains_vasp_outputp('.'):
+        clear_useless_vasp_files('.')
         run_folder = get_next_run_folder()
         backup_current_dir(run_folder)
 

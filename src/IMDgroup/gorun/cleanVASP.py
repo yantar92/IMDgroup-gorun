@@ -32,6 +32,7 @@ import os
 import shutil
 import re
 import warnings
+from pathlib import Path
 import ase.io.vasp
 from ase.calculators.vasp import Vasp
 from pymatgen.io.vasp.inputs import Incar
@@ -85,6 +86,17 @@ def mdp(path):
         if incar.get('IBRION') == 0:
             return True
     return False
+
+
+def clear_useless_vasp_files(path='.'):
+    """Clear all the unusable VASP files.
+    This includes empty CHG, CHGCAR, REPORT, and WAVECAR.
+    """
+    files = [Path(path) / file for file in
+             ["CHG", "CHGCAR", "REPORT", "WAVECAR"]]
+    for f in files:
+        if f.is_file() and f.stat().st_size == 0:
+            f.unlink()
 
 
 def contcar_to_poscar(path) -> None:
