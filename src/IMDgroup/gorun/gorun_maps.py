@@ -66,6 +66,11 @@ def get_args():
         type=str,
         default=None)
     argparser.add_argument(
+        "--gorun_command",
+        help="Path to gorun command to use (default: use gorun in $PATH)",
+        type=str,
+        default="gorun")
+    argparser.add_argument(
         "--local",
         help="Whether to run locally (do not use sbatch)",
         action="store_true")
@@ -162,7 +167,7 @@ def main():
 
 maps {' '.join(args.maps_args)} &
 sleep 5
-pollmach gorun-atat-local {'--skip_relax' if args.skip_relax else ''} --kpoints={args.kpoints} --frac_tol={args.frac_tol} --max_strain={args.max_strain} {'--sublattice_cutoff='+str(args.sublattice_cutoff) if args.sublattice_cutoff else ''} gorun --local --no_vasp_config
+pollmach gorun-atat-local {'--skip_relax' if args.skip_relax else ''} --kpoints={args.kpoints} --frac_tol={args.frac_tol} --max_strain={args.max_strain} {'--sublattice_cutoff='+str(args.sublattice_cutoff) if args.sublattice_cutoff else ''} {args.gorun_command} --local --no_vasp_config
 """,
         config[server].get('shebang', "#!/usr/bin/bash"))
     with open('sub', 'w', encoding='utf-8') as f:
