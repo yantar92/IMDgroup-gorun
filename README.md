@@ -2,51 +2,142 @@
 
 # IMDgroup-gorun
 
-This is a set of scripts for supercomputer job submission for VASP and
-ATAT via [slurm](https://slurm.schedmd.com/), that are tailored to research that is performed in
-[Inverse Materials Design group](https://www.oimalyi.org/).
+This package provides a set of scripts for supercomputer job
+submission for VASP and ATAT via [Slurm](https://slurm.schedmd.com/). It is tailored to research
+performed in the [Inverse Materials Design group](https://www.oimalyi.org/), creating a unified
+interface for running calculations across different high-performance
+computing clusters (e.g., Athena, Ares, Helios, LUMI).
 
 
 # Installation
 
-    # Download the package and source dependencies
     git clone https://git.sr.ht/~yantar92/IMDgroup-gorun
+    cd IMDgroup-gorun
+    pip install .
+
+
+# Configuration
+
+The tool relies on specific environment variables and a TOML
+configuration file to adapt to different cluster environments.
+
+
+## Environment Variables
+
+Add the following to your `.bashrc` or submission environment:
+
+-   **`IMDGroup`:** Path to the directory containing configuration files
+    (specifically `$IMDGroup/dist/etc/gorun.toml`).
+-   **`VASP_PATH`:** Root directory of the VASP installation. The scripts
+    expect binaries at `$VASP_PATH/bin/vasp_std`, etc.
+-   **`VASP_PP_PATH`:** Path to VASP pseudopotentials (required for
+    automatic POTCAR generation).
+-   **`CLUSTER_NAME`:** (Optional) Manually override the cluster name
+    detection (usually automatic via `uname -n`).
+
+
+## Configuration File (`gorun.toml`)
+
+The behavior of `gorun` is defined in a TOML file. This file maps
+hostnames to cluster definitions and specifies available queues,
+modules to load, and default resource limits.
+
+    [cluster.names]
+    lumi = ['uan01', 'uan02']
     
-    # Activate virtual environment
-    pip -m venv .venv
-    . .venv/bin/activate
+    [lumi]
+    queues = ['standard', 'small']
+    VASP-setup = "module load LUMI/24.03 ..."
+    mpiexec = "srun"
     
-    # Install into the environment
-    pip install IMDgroup-gorun
+    [lumi.standard]
+    type = 'CPU'
+    partition = 'standard'
+    max-nodes = 512
+    max-time = '48:00:00'
 
 
-# Features
-
--   Submit slurm jobs in a single unified command, consistent across
-    different supercomputers (specific per-cluster configuration is
-    configured separately)
--   Automatically detect the most suitable queue (experimental)
--   Make sure that the VASP input to be submitted is sane
-    -   Check for any issues in ICNAR/POSCAR and automatically resolve (when safe)
-    -   Check if VASP calcualtion is already converged
--   If an existing VASP output is present, automatically back it up
-    and restart the VASP, using the results of the previous calculation
--   Automatically generate POTCAR file
--   Automatically setup vdW kernel
--   Submit ATAT jobs in a single unified command
-    -   Customize individual VASP runs invoked by ATAT
+# Command Line Interface
 
 
-# TODO Usage
+## `gorun`
+
+The primary command to submit a VASP job from the current directory.
+
+    # Submit job requesting 2 nodes for 24 hours
+    gorun 2 24:00:00
+    
+    # Submit to a specific queue
+    gorun --queue plgrid-gpu-a100
+    
+    # Run locally (no sbatch) for testing
+    gorun --local
 
 
-# TODO Citing
+### Automatic Job Preparation
+
+Before submission, `gorun` performs several sanity checks and
+preparation steps:
+
+1.  Safety Checks :: Aborts if `INCAR` is missing, or if a job is
+    already `RUNNING` or queued.
+2.  Convergence Check :: If the directory already contains a converged
+    calculation, it exits to prevent wasting resources (unless
+    `--force` is used).
+3.  Backup :: If output exists, it backs up the current directory to
+    `gorun_N` (incrementing N) before starting fresh.
+4.  Input Sanitization :: Cleans `INCAR`, `POSCAR`, `KPOINTS` (fixing
+    newlines, removing BOMs).
+5.  Auto-POTCAR :: Generates `POTCAR` using ASE if `POSCAR` exists and
+    `POTCAR` is missing.
+6.  vdW Kernel :: Automatically copies `vdw_kernel.bindat` from the
+    VASP source directory if required.
 
 
-# Contributing
+### Smart Queue Selection
 
-We welcome contributions in all forms. If you want to contribute,
-please fork this repository, make changes and send us a pull request!
+If no queue is specified, `gorun` queries the scheduler
+(`sbatch --test-only`) to estimate start times for all available
+partitions defined in the config. It selects the queue that offers the
+**earliest finish time**.
+
+
+### Python Scripting via `INCAR.py`
+
+If a file named `INCAR.py` is present, `gorun` wraps the VASP
+execution in a Python script using ASE. This allows dynamic
+manipulation of the calculator before or after the run (e.g., for
+sophisticated relaxation protocols).
+
+
+## `gorun-maps`
+
+A wrapper to submit ATAT's `maps` (Cluster Expansion) code to Slurm.
+
+    # Run maps in current directory with specific VASP settings for the sub-jobs
+    gorun-maps --kpoints=3000 --max_strain=0.1
+
+This command launches `maps` on the compute node. It configures `maps`
+to use `gorun-atat-local` as the calculation script.
+
+
+## `gorun-atat-local`
+
+The worker script used by ATAT to run individual structural
+calculations. It integrates deeply with `IMDgroup-pymatgen` to ensure
+robust calculations.
+
+Features:
+
+-   **Derivation** : Creates VASP inputs from ATAT's `str.out` using the parent directory as a template (inheriting INCAR, etc.).
+-   **Validation**
+    -   Checks if atoms are too close before running.
+    -   Verifies K-point density (rejects grids with too few points along one axis).
+    -   After relaxation, checks for excessive **volume distortion** or
+        **sublattice flipping**. If the structure deviates too much from the
+        lattice hypothesis, it marks the run as an error to avoid
+        contaminating the cluster expansion.
+-   **SCF**: Can optionally run a static SCF calculation after relaxation.
 
 
 # Acknowledgements
