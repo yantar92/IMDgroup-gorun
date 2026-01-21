@@ -79,18 +79,18 @@ The primary command to submit a VASP job from the current directory.
 Before submission, `gorun` performs several sanity checks and
 preparation steps:
 
-1.  Safety Checks :: Aborts if `INCAR` is missing, or if a job is
+-   **Safety Checks:** Aborts if `INCAR` is missing, or if a job is
     already `RUNNING` or queued.
-2.  Convergence Check :: If the directory already contains a converged
+-   **Convergence Check:** If the directory already contains a converged
     calculation, it exits to prevent wasting resources (unless
     `--force` is used).
-3.  Backup :: If output exists, it backs up the current directory to
+-   **Backup:** If output exists, it backs up the current directory to
     `gorun_N` (incrementing N) before starting fresh.
-4.  Input Sanitization :: Cleans `INCAR`, `POSCAR`, `KPOINTS` (fixing
+-   **Input Sanitization:** Cleans `INCAR`, `POSCAR`, `KPOINTS` (fixing
     newlines, removing BOMs).
-5.  Auto-POTCAR :: Generates `POTCAR` using ASE if `POSCAR` exists and
+-   **Auto-POTCAR:** Generates `POTCAR` using ASE if `POSCAR` exists and
     `POTCAR` is missing.
-6.  vdW Kernel :: Automatically copies `vdw_kernel.bindat` from the
+-   **vdW Kernel:** Automatically copies `vdw_kernel.bindat` from the
     VASP source directory if required.
 
 
