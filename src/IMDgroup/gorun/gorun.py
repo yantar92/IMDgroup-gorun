@@ -186,7 +186,9 @@ gorun 2 24:00:00
         type=int,
         default=0
     )
-    return argparser.parse_args(namespace=namespace)
+    if namespace:
+        return argparser.parse_args(args=list(), namespace=namespace)
+    return argparser.parse_args()
 
 
 GORUN_BACKUP_PREFIX = "gorun"
