@@ -242,11 +242,11 @@ def backup_current_dir(to: str) -> None:
                 subprocess.check_call(f"rsync -qr {dirname} './{to}'", shell=True)
 
 
-def main():
-    """Run the script."""
+def run(args):
+    """Run the script with ARGS.
+    """
     barf_if_no_env("VASP_PATH")
     barf_if_no_env("VASP_PP_PATH")
-    args = get_args()
     config = get_config(args)
     server = current_server(config)
     queues = config[server]['queues']
@@ -399,3 +399,9 @@ kill $monitor_pid 2>/dev/null
         else:
             print(colored('Failed to submit to SLURM scheduler.', "red"))
     return 0
+
+
+def main():
+    """Run the script."""
+    args = get_args()
+    return run(args)
