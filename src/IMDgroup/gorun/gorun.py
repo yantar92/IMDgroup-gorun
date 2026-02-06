@@ -95,7 +95,7 @@ Path("UNCONVERGED").unlink()
 """
 
 
-def get_args():
+def get_args(namespace=None):
     """Parse command line args and return arg dictionary."""
     argparser = argparse\
         .ArgumentParser(
@@ -186,7 +186,7 @@ gorun 2 24:00:00
         type=int,
         default=0
     )
-    return argparser.parse_args()
+    return argparser.parse_args(namespace=namespace)
 
 
 GORUN_BACKUP_PREFIX = "gorun"
@@ -242,11 +242,12 @@ def backup_current_dir(to: str) -> None:
                 subprocess.check_call(f"rsync -qr {dirname} './{to}'", shell=True)
 
 
-def run(args):
+def run(args: argparse.Namespace):
     """Run the script with ARGS.
     """
     barf_if_no_env("VASP_PATH")
     barf_if_no_env("VASP_PP_PATH")
+    args = get_args(namespace=args)
     config = get_config(args)
     server = current_server(config)
     queues = config[server]['queues']
