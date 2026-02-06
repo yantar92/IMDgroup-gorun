@@ -242,7 +242,7 @@ def backup_current_dir(to: str) -> None:
                 subprocess.check_call(f"rsync -qr {dirname} './{to}'", shell=True)
 
 
-def run(args: argparse.Namespace):
+def run(args: argparse.Namespace | None = None):
     """Run the script with ARGS.
     """
     barf_if_no_env("VASP_PATH")
