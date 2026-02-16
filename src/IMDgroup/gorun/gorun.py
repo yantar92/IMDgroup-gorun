@@ -119,7 +119,9 @@ run VASP via ASE as the following:
 Srlurm script will be saved under name 'sub'.""",
             epilog="""Example:
 gorun 2 24:00:00
-- Submits a job requesting 2 nodes with a 24-hour time limit.""")
+- Submits a job requesting 2 nodes with a 24-hour time limit.
+
+For batch submission of multiple directories, use gorun-all-ready.sh.""")
 
     argparser.add_argument(
         "number_of_nodes", help="number of nodes to request (optional)",
@@ -161,7 +163,8 @@ gorun 2 24:00:00
     argparser.add_argument(
         "--mark",
         help="When set, do not invoke sbatch sub at the end,"
-        " just check and create 'gorun_ready' file",
+        " just check and create 'gorun_ready' file. Use gorun-all-ready.sh"
+        " for batch submission of multiple ready directories.",
         action="store_true")
     argparser.add_argument(
         "--force",

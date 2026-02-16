@@ -134,6 +134,29 @@ Features:
     contaminating the cluster expansion.
 - *SCF*: Can optionally run a static SCF calculation after relaxation.
 
+* Batch Submission
+
+The package includes a companion Bash script =gorun-all-ready.sh= for submitting multiple jobs in batch. This is useful when you have many directories prepared with =gorun --mark= and want to submit them while respecting a limit on concurrent Slurm jobs.
+
+** Usage
+
+#+begin_src bash
+  # Submit all ready directories, limiting to 4 concurrent jobs
+  gorun-all-ready.sh -n 4
+
+  # Specify a different root directory and increase verbosity
+  gorun-all-ready.sh -d /path/to/project -n 8 -v
+#+end_src
+
+** How it works
+
+1. The script recursively searches for =gorun_ready= marker files.
+2. For each directory containing a marker, it checks the current number of jobs you have in the queue (via =squeue=).
+3. If the count is below the limit, it runs =sbatch sub= in that directory and removes the marker.
+4. If the limit is reached, it waits a configurable interval before retrying.
+
+This ensures you never exceed your allocated job limit while automatically processing all ready calculations.
+
 * Acknowledgements
 
 We acknowledge financial support from the National Centre for Research
