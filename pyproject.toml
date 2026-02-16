@@ -36,7 +36,7 @@ gorun-atat-local = "IMDgroup.gorun.gorun_atat_local:main"
 gorun-maps = "IMDgroup.gorun.gorun_maps:main"
 
 [tool.setuptools]
-scripts = ["scripts/gorun-all-ready.sh"]
+script-files = ["scripts/gorun-all-ready.sh"]
 
 [tool.setuptools.packages.find]
 exclude = ["tests"]
