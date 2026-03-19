@@ -162,7 +162,7 @@ def get_best_script(
 
     if all(data is None for data in schedule_estimates):
         raise OSError(
-            "No single queue is available for running.  Check grant limits")
+            "No single queue is available for running.  Check grant limits.  It may also help to re-login.")
 
     now = dateutil.utils.today()
     best_finish_time = now + \
