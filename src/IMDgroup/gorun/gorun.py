@@ -190,7 +190,13 @@ For batch submission of multiple directories, use gorun-all-ready.sh.""")
         default=0
     )
     if namespace:
-        return argparser.parse_args(args=list(), namespace=namespace)
+        # Get default values by parsing an empty argument list
+        defaults = argparser.parse_args([])
+        # Fill missing attributes in namespace with defaults
+        for key, value in vars(defaults).items():
+            if not hasattr(namespace, key):
+                setattr(namespace, key, value)
+        return namespace
     return argparser.parse_args()
 
 
