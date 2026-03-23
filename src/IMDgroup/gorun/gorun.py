@@ -232,10 +232,9 @@ def backup_current_dir(to: str) -> None:
         previous_dir = f"{GORUN_BACKUP_PREFIX}_{previous_dir_num}"
         if previous_dir_num != 1 and Path(previous_dir).is_dir():
             print(f"Compressing previous run: {previous_dir}")
-            with zopen(f"{previous_dir}.tar.gz", "wb") as f_out:
-                with tarfile.open(mode="w:gz", fileobj=f_out) as tar:
-                    tar.add(previous_dir)
-                    shutil.rmtree(previous_dir)
+            with tarfile.open(f"{previous_dir}.tar.gz", mode="w:gz") as tar:
+                tar.add(previous_dir)
+                shutil.rmtree(previous_dir)
     if Path('gorun_ready').is_file():
         print("Found gorun_ready. Deleting")
         Path('gorun_ready').unlink()
