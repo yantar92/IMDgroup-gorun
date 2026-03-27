@@ -38,7 +38,7 @@
 #   -n, --max-jobs NUM   Maximum concurrent Slurm jobs (default: 100)
 #   -d, --directory DIR  Search root directory (default: current directory)
 #   -t, --timeout SEC    Sleep interval between queue checks (default: 5)
-#   -v, --verbose        Print extra information
+#   -q, --quiet          Do not print extra information
 #   -h, --help           Show this help text
 #
 # Example:
@@ -65,7 +65,7 @@ readonly VERSION="1.0.0"
 MAX_JOBS=100
 SEARCH_DIR="."
 SLEEP_INTERVAL=5
-VERBOSE=false
+VERBOSE=true
 
 # ------------------------------------------------------------
 # Utility functions
@@ -96,7 +96,7 @@ Options:
   -n, --max-jobs NUM   Maximum concurrent Slurm jobs (default: 100)
   -d, --directory DIR  Search root directory (default: current directory)
   -t, --timeout SEC    Sleep interval between queue checks (default: 5)
-  -v, --verbose        Print extra information
+  -q, --quiet          Do not print extra information
   -h, --help           Show this help text
   --version            Show version information
 
@@ -175,8 +175,8 @@ while [[ $# -gt 0 ]]; do
             SLEEP_INTERVAL="$2"
             shift 2
             ;;
-        -v|--verbose)
-            VERBOSE=true
+        -q|--quiet)
+            VERBOSE=false
             shift
             ;;
         -h|--help)
