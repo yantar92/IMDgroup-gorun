@@ -91,9 +91,11 @@ def mdp(path):
 def clear_useless_vasp_files(path='.'):
     """Clear all the unusable VASP files.
     This includes empty CHG, CHGCAR, REPORT, and WAVECAR.
+    Also, vasprun.xml and OUTCAR.
     """
     files = [Path(path) / file for file in
-             ["CHG", "CHGCAR", "REPORT", "WAVECAR"]]
+             ["CHG", "CHGCAR", "REPORT", "WAVECAR",
+              'OUTCAR', 'vasprun.xml']]
     for f in files:
         if f.is_file() and f.stat().st_size == 0:
             f.unlink()
