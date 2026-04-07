@@ -300,7 +300,7 @@ def run(args: argparse.Namespace = argparse.Namespace()):
         return 1
 
     extra_incars = None
-    if not mdp('.') and directory_converged_p('.') and not args.force:
+    if not mdp('.') and not args.force and directory_converged_p('.'):
         extra_incars = sorted(list(Path('.').glob(r"INCAR.[0-9]*")))
         if len(extra_incars) > 0:
             print(colored(
