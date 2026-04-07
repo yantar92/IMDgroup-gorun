@@ -319,7 +319,8 @@ def run(args: argparse.Namespace = argparse.Namespace()):
             print("Waiting for submitted jobs to finish")
             time.sleep(10)
 
-    if directory_contains_vasp_outputp('.'):
+    if (not args.no_incar_py and Path('INCAR.py').is_file()) or\
+       directory_contains_vasp_outputp('.'):
         clear_useless_vasp_files('.')
         run_folder = get_next_run_folder()
         backup_current_dir(run_folder)
