@@ -40,6 +40,7 @@ import tarfile
 from pathlib import Path
 from termcolor import colored
 from monty.io import zopen
+from IMDgroup.pymatgen.io.vasp.inputs import Incar
 from IMDgroup.gorun.slurm import\
     (barf_if_no_cmd, directory_queued_p,
      clear_slurm_logs, get_best_script, user_job_count)
@@ -189,6 +190,11 @@ For batch submission of multiple directories, use gorun-all-ready.sh.""")
         type=int,
         default=0
     )
+    argparser.add_argument(
+        "--incar",
+        help="Modify INCAR before submitting (e.g. ALGO:Normal NELM:200)",
+        type=str,
+        default=None)
     if namespace:
         # Get default values by parsing an empty argument list
         defaults = argparser.parse_args([])
@@ -328,6 +334,21 @@ def run(args: argparse.Namespace = argparse.Namespace()):
     if extra_incars is not None:
         Path('INCAR').rename('INCAR.old')
         extra_incars[0].rename('INCAR')
+
+    if args.incar:
+        incar = Incar.from_file('INCAR')
+        incar_before = incar.copy()
+        for str_val in args.incar.split(' '):
+            key, val = str_val.split(':')
+            if val == 'None':
+                val = None
+            incar[key] = val
+        incar.write_file('INCAR')
+        incar_diff = incar_before.diff(incar).get('Different')
+        if incar_diff is not None and len(incar_diff) > 0:
+            print(colored(f"Changed INCAR: {incar_diff}", 'yellow'))
+        else:
+            print(colored("Leaving INCAR unchanged", 'yellow'))
 
     prepare_vasp_dir('.', args.keep_potcar, args.keep_poscar)
     if nebp('.'):
