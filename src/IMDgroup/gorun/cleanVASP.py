@@ -99,6 +99,19 @@ def clear_useless_vasp_files(path='.'):
             f.unlink()
 
 
+def clear_vasp_outputs(path='.'):
+    """Clear all the VASP output files.
+    """
+    files = [Path(path) / file for file in
+             ["CHG", "CHGCAR", "REPORT", "WAVECAR",
+              "CONTCAR", "DOSCAR", "EIGENVAL",
+              "IBZKPT", "OSZICAR", "OUTCAR",
+              "PCDAT", "vasprun.xml", "XDATCAR"]]
+    for f in files:
+        if f.is_file():
+            f.unlink()
+
+
 def contcar_to_poscar(path) -> None:
     """When CONTCAR exists, copy it over to POSCAR in PATH.
     """
@@ -232,3 +245,5 @@ def prepare_vasp_dir(path='.', keep_potcar=False, keep_poscar=False) -> None:
     generate_potcar(path, keep_potcar)
     # Copy over vdw kernel
     put_vdw_kernel(path)
+    # Clear old VASP outputs
+    clear_vasp_outputs(path)
