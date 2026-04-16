@@ -66,6 +66,7 @@ from pathlib import Path
 from ase.calculators.vasp import Vasp
 from ase.io import read as ase_read
 from IMDgroup.gorun.cleanVASP import generate_potcar
+from IMDgroup.pymatgen.io.vasp.vaspdir import IMDGVaspDir
 
 # Replace ASE's POTCAR generation with your function
 def custom_write_potcar(self, suffix="", directory='.'):
@@ -86,6 +87,9 @@ calc.read_kpoints('KPOINTS')
 # POSCAR can be a copy of CONTCAR as needed
 atoms = ase_read('POSCAR', format="vasp")
 atoms.calc = calc
+
+# Setup IMDGVaspDir
+vaspdir = IMDGVaspDir('.')
 
 # Mark UNCONVERGED
 Path("UNCONVERGED").touch()
@@ -115,7 +119,15 @@ and the run is converged, replace INCAR with the first INCAR.X, and re-run.
 When there is INCAR.py file, do not run VASP directly. Instead,
 run VASP via ASE as the following:
 {PYTHON_HEADER}
-# <INCAR.py contents inserted here and can access atoms variable with calculator all set>
+# INCAR.py contents inserted here
+# and can access ASE's atoms variable with calculator all set
+# Additionally, IMDgroup.pymatgen.io.vasp.vaspdir.IMDGVaspDir
+# object will be set to vaspdir variable and contain current
+# VASP input directory data.
+# ASE will be arranged to use gorun to run VASP.
+# Without ASE, you can use VASP_COMMAND environment
+# variable to run VASP:
+# Value: gorun --local --no_incar_py --force --no_clean --keep_poscar
 {PYTHON_FINALIZER}
 Srlurm script will be saved under name 'sub'.""",
             epilog="""Example:
