@@ -354,7 +354,10 @@ def run(args: argparse.Namespace = argparse.Namespace()):
             key, val = str_val.split(':')
             if val == 'None':
                 val = None
-            incar[key] = val
+                if key in incar:
+                    del incar[key]
+            else:
+                incar[key] = val
         incar.write_file('INCAR')
         incar_diff = incar_before.diff(incar).get('Different')
         if incar_diff is not None and len(incar_diff) > 0:
