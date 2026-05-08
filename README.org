@@ -61,101 +61,295 @@ modules to load, and default resource limits.
 ** ~gorun~
 
 The primary command to submit a VASP job from the current directory.
+Positional arguments specify the number of nodes and the time limit:
 
 #+begin_src bash
   # Submit job requesting 2 nodes for 24 hours
   gorun 2 24:00:00
 
-  # Submit to a specific queue
-  gorun --queue plgrid-gpu-a100
-
-  # Run locally (no sbatch) for testing
-  gorun --local
+  # Use default nodes/time from config (positional args optional)
+  gorun
 #+end_src
 
-*** Automatic Job Preparation
-Before submission, ~gorun~ performs several sanity checks and
-preparation steps:
+*** Options
 
-- Safety Checks :: Aborts if ~INCAR~ is missing, or if a job is
-  already ~RUNNING~ or queued.
-- Convergence Check :: If the directory already contains a converged
-  calculation, it exits to prevent wasting resources (unless
-  ~--force~ is used).
-- Backup :: If output exists, it backs up the current directory to
-  ~gorun_N~ (incrementing N) before starting fresh.
-- Input Sanitization :: Cleans ~INCAR~, ~POSCAR~, ~KPOINTS~ (fixing
-  newlines, removing BOMs).
-- Auto-POTCAR :: Generates ~POTCAR~ using ASE if ~POSCAR~ exists and
-  ~POTCAR~ is missing.
-- vdW Kernel :: Automatically copies ~vdw_kernel.bindat~ from the
-  VASP source directory if required.
+- =--config PATH= :: Path to TOML configuration file (default:
+  =$IMDGroup/dist/etc/gorun.toml=).
+
+- =--queue NAME= :: Submit to a specific queue (default: let the
+  scheduler pick the one with the earliest finish time).
+
+- =--vasp {ncl,gam,std}= :: Select the VASP binary variant (default:
+  =ncl=).
+
+- =--local= :: Run VASP directly on the login node instead of
+  submitting via =sbatch=. Useful for testing short jobs.
+
+- =--mark= :: Prepare the directory and create a =gorun_ready= marker
+  file, but do not submit. Use =gorun-all-ready.sh= to submit
+  multiple marked directories later (see [[*Batch Submission]]).
+
+- =--force= :: Skip convergence checks and run VASP even if the
+  directory already contains converged output.
+
+- =--keep_potcar= :: Do not regenerate =POTCAR= if it already exists.
+
+- =--keep_poscar= :: Do not copy =CONTCAR= to =POSCAR= if =CONTCAR=
+  is present.
+
+- =--no_clean= :: Skip cleanup of old SLURM log files and VASP
+  outputs after backing up.
+
+- =--no_incar_py= :: Ignore =INCAR.py= even if present; run VASP
+  directly.
+
+- =--no_vasp_config= :: Do not source the cluster's VASP module setup
+  (the =VASP-setup= line from the config). Use when the environment
+  is already configured upstream.
+
+- =--incar= ="KEY:val KEY2:val2"= :: Modify INCAR parameters before
+  submission. Multiple space-separated =KEY:value= pairs. Set =None=
+  as value to delete a key. Before modifying, the current directory
+  is backed up to =gorun_N= (incrementing N) if VASP outputs already
+  exist, preserving the old INCAR and data. Example:
+  #+begin_src bash
+    gorun --incar="ALGO:Normal NELM:200 NSW:50"
+  #+end_src
+
+- =--max_slurm_jobs N= :: Wait until the number of running Slurm jobs
+  drops below N before submitting (default: 0 = no limit).
+
+- =NODES=, =TIME= :: Positional arguments: number of nodes and time
+  limit in =hh:mm:ss= format. Both are optional; defaults come from
+  the config file.
+
+*** Examples
+
+#+begin_src bash
+  # Submit to a specific GPU queue with 8 nodes for 48 hours
+  gorun --queue plgrid-gpu-a100 8 48:00:00
+
+  # Use gamma-point-only VASP binary, 1 node, 1 hour
+  gorun --vasp gam 1 1:00:00
+
+  # Run locally (no sbatch) for quick testing
+  gorun --local 1 0:30:00
+
+  # Prepare directory for later batch submission
+  gorun --mark 4 24:00:00
+
+  # Override INCAR settings before submission
+  gorun --incar="ISIF:3 NSW:100" 2 24:00:00
+
+  # Force re-run even if already converged
+  gorun --force 2 24:00:00
+
+  # Limit concurrent jobs to 20
+  gorun --max_slurm_jobs 20 2 24:00:00
+#+end_src
+
+*** Job Preparation Pipeline
+
+Before submission, ~gorun~ runs the following steps in order:
+
+1. Safety checks :: Aborts if =INCAR= is missing, or if a job is
+   already =RUNNING= or queued in the same directory.
+2. Convergence check :: If the directory contains converged output,
+   exits (unless =--force= is set). If multiple sequential =INCAR.*=
+   files exist, replaces =INCAR= with the next one and continues.
+3. Backup :: If VASP outputs already exist, copies the directory to
+   =gorun_N= (incrementing N) and compresses the previous backup.
+   =WAVECAR= is excluded from backups.
+4. INCAR modification :: If =--incar= was given, applies the changes
+   now.
+5. Input sanitization :: Cleans =INCAR=, =POSCAR=, =KPOINTS=
+   (newlines, BOMs, blank lines).
+6. POTCAR generation :: Uses ASE to generate =POTCAR= from =POSCAR=.
+   Skips if =--keep_potcar= is set.
+7. vdW kernel :: Copies =vdw_kernel.bindat= from =$VASP_PATH= if the
+   INCAR requests vdW corrections.
+8. Cleanup :: Removes old SLURM log files and zero-size VASP outputs.
 
 *** Smart Queue Selection
 
-If no queue is specified, ~gorun~ queries the scheduler
-(~sbatch --test-only~) to estimate start times for all available
-partitions defined in the config. It selects the queue that offers the
-*earliest finish time*.
+If no =--queue= is given, ~gorun~ calls ~sbatch --test-only~ for
+every partition listed in the config. It estimates the finish time
+for each option (waiting time + run time scaled by CPU count) and
+selects the partition that finishes earliest.
 
 *** Python Scripting via ~INCAR.py~
 
-If a file named ~INCAR.py~ is present, ~gorun~ wraps the VASP
-execution in a Python script using ASE. This allows dynamic
-manipulation of the calculator before or after the run (e.g., for
-sophisticated relaxation protocols).
+If =INCAR.py= is present in the directory and =--no_incar_py= is not
+set, ~gorun~ wraps VASP execution inside a Python script using ASE.
+The script has the calculator pre-configured and can access a
+=IMDGVaspDir= object via the variable =vaspdir=:
+
+#+begin_src python
+  # Example INCAR.py contents
+  # Access the pre-set ASE calculator
+  from ase.constraints import FixAtoms
+  atoms.set_constraint(FixAtoms(mask=[atom.symbol == 'Li' for atom in atoms]))
+  energy = atoms.get_potential_energy()
+#+end_src
+
+The generated Slurm script exports =VASP_COMMAND= that points back to
+=gorun --local --no_incar_py --force --no_clean --keep_poscar= for
+the ASE calculator to invoke.
 
 ** ~gorun-maps~
 
-A wrapper to submit ATAT's ~maps~ (Cluster Expansion) code to Slurm.
+Wrapper to submit ATAT's ~maps~ (Cluster Expansion) code to Slurm.
+Launches ~maps~ on the compute node and configures it to use
+~gorun-atat-local~ as the calculation script.
+
+*** Options
+
+- =--kpoints DENSITY= (required) :: K-point density for VASP
+  sub-jobs.
+
+- =--max_strain FRAC= :: Maximum allowed strain before a structure is
+  flagged as an error (default: =0.1=).
+
+- =--frac_tol FRAC= :: Distance tolerance for rejecting structures
+  with atoms too close together (default: =0.5=).
+
+- =--skip_relax= :: Skip the relaxation step in each sub-job (run
+  only the SCF calculation).
+
+- =--sublattice_cutoff DIST= :: Mark a structure as error if its
+  sublattice deviation exceeds this value (default: off).
+
+- =--time_limit HH:MM:SS= :: Time limit for the =maps= parent job
+  (optional).
+
+- =--queue NAME= :: Submit to a specific queue (default: auto-select
+  earliest finish).
+
+- =--config PATH= :: Path to configuration TOML (default:
+  =$IMDGroup/dist/etc/gorun.toml=).
+
+- =--gorun_command PATH= :: Path to the =gorun= executable used by
+  =pollmach= (default: =gorun= from =$PATH=).
+
+- =--local= :: Run =maps= directly on the login node instead of
+  submitting via =sbatch=.
+
+- =--maps_args ARGS= :: Additional arguments to pass through to the
+  =maps= executable (space-separated).
+
+*** Examples
 
 #+begin_src bash
-  # Run maps in current directory with specific VASP settings for the sub-jobs
+  # Basic cluster-expansion run
   gorun-maps --kpoints=3000 --max_strain=0.1
-#+end_src
 
-This command launches ~maps~ on the compute node. It configures ~maps~
-to use ~gorun-atat-local~ as the calculation script.
+  # Skip relaxation (SCF only), tighter strain tolerance
+  gorun-maps --kpoints=4000 --max_strain=0.05 --skip_relax
+
+  # Custom sublattice deviation cutoff
+  gorun-maps --kpoints=3000 --sublattice_cutoff=0.15
+
+  # Pass additional arguments to maps
+  gorun-maps --kpoints=3000 --maps_args="-e=4 -gs=0.001"
+#+end_src
 
 ** ~gorun-atat-local~
 
-The worker script used by ATAT to run individual structural
-calculations. It integrates deeply with ~IMDgroup-pymatgen~ to ensure
-robust calculations.
+Worker script invoked by ATAT's ~pollmach~ to run individual
+structural calculations. Each call processes a single =str.out=
+generated by =maps=, creating VASP inputs from the parent directory
+as template.
 
-Features:
-- *Derivation* : Creates VASP inputs from ATAT's ~str.out~ using the parent directory as a template (inheriting INCAR, etc.).
-- *Validation*
-  - Checks if atoms are too close before running.
-  - Verifies K-point density (rejects grids with too few points along one axis).
-  - After relaxation, checks for excessive *volume distortion* or
-    *sublattice flipping*. If the structure deviates too much from the
-    lattice hypothesis, it marks the run as an error to avoid
-    contaminating the cluster expansion.
-- *SCF*: Can optionally run a static SCF calculation after relaxation.
+*** Options
+
+- =--kpoints DENSITY= (required) :: K-point density for the VASP run.
+
+- =--frac_tol FRAC= :: Reject structures where any two atoms are
+  closer than this tolerance (default: =0=, meaning no rejection by
+  distance).
+
+- =--max_strain FRAC= :: Reject structures whose volume change
+  exceeds this fraction (default: =0.1=).
+
+- =--skip_relax= :: Skip the ionic relaxation step. Only the SCF
+  calculation is performed.
+
+- =--sublattice_cutoff DIST= :: Flag structures whose sublattice
+  deviation equals or exceeds this value. Writes
+  =error_sublattice= marker (default: off).
+
+- =VASP_COMMAND [ARGS]= (positional, remainder) :: Command to invoke
+  VASP. All remaining arguments are passed through verbatim.
+
+*** Validation Pipeline
+
+Each sub-job goes through the following checks:
+
+1. Input derivation :: Reads =str.out= and the parent directory to
+   create VASP input files (written into =./ATAT=).
+2. Distance check :: Rejects the structure if atoms are too close
+   (writes =error_atoms_too_close=).
+3. K-point grid check :: Rejects if the grid has too few points along
+   an axis (writes =error_kpoints_dim_sparse=).
+4. Relaxation :: Runs VASP in =./ATAT= (skipped with =--skip_relax=).
+5. Volume distortion check :: Rejects if the cell volume changed by
+   more than =--max_strain= (writes =error_strain=).
+6. Sublattice check :: Detects sublattice flips. If a flip is found,
+   attempts to fit the refined lattice and updates =str.out=. If
+   deviation exceeds =--sublattice_cutoff= (writes
+   =error_sublattice=).
+7. SCF :: Runs a static SCF calculation in =./ATAT.SCF=.
+8. Energy output :: Writes the final energy to a file named =energy=.
 
 * Batch Submission
 
-The package includes a companion Bash script =gorun-all-ready.sh= for submitting multiple jobs in batch. This is useful when you have many directories prepared with =gorun --mark= and want to submit them while respecting a limit on concurrent Slurm jobs.
+The package includes a companion Bash script =gorun-all-ready.sh= for
+submitting multiple jobs in batch. This is useful when you have many
+directories prepared with =gorun --mark= and want to submit them while
+respecting a limit on concurrent Slurm jobs.
 
-** Usage
+** Options
+
+- =-n NUM=, =--max-jobs NUM= :: Maximum number of concurrent Slurm
+  jobs allowed (default: =100=).
+
+- =-d DIR=, =--directory DIR= :: Root directory to search for
+  =gorun_ready= markers (default: current directory).
+
+- =-t SEC=, =--timeout SEC= :: Sleep interval (in seconds) between
+  queue checks when waiting for jobs to finish (default: =5=).
+
+- =-q=, =--quiet= :: Suppress informational output. Errors are still
+  printed.
+
+- =--version= :: Print version number and exit.
+
+** Examples
 
 #+begin_src bash
-  # Submit all ready directories, limiting to 4 concurrent jobs
+  # Submit all ready directories, limit to 4 concurrent jobs
   gorun-all-ready.sh -n 4
 
-  # Specify a different root directory and increase verbosity
-  gorun-all-ready.sh -d /path/to/project -n 8 -v
+  # Search in a specific project tree, 8 concurrent jobs
+  gorun-all-ready.sh -d /path/to/project -n 8
+
+  # Quiet mode, check queue every 30 seconds
+  gorun-all-ready.sh -n 10 -t 30 -q
 #+end_src
 
 ** How it works
 
-1. The script recursively searches for =gorun_ready= marker files.
-2. For each directory containing a marker, it checks the current number of jobs you have in the queue (via =squeue=).
-3. If the count is below the limit, it runs =sbatch sub= in that directory and removes the marker.
-4. If the limit is reached, it waits a configurable interval before retrying.
+1. Recursively searches for =gorun_ready= marker files under the
+   search directory.
+2. For each directory containing a marker, checks the current number
+   of running/pending Slurm jobs (via =squeue -u $USER=).
+3. If the count is below the limit, runs =sbatch sub= in that
+   directory and removes the marker.
+4. If the limit is reached, waits for =--timeout= seconds, then
+   re-checks the queue.
 
-This ensures you never exceed your allocated job limit while automatically processing all ready calculations.
+Exit codes: 0 = success, 1 = argument error, 2 = missing command,
+3 = no =gorun_ready= files found, 4 = =sbatch= failure.
 
 * Acknowledgements
 
