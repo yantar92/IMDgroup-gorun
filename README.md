@@ -88,7 +88,7 @@ Positional arguments specify the number of nodes and the time limit:
 
 -   **`--mark`:** Prepare the directory and create a `gorun_ready` marker
     file, but do not submit. Use `gorun-all-ready.sh` to submit
-    multiple marked directories later (see [5](#org172a9b3)).
+    multiple marked directories later (see [5](#orgcf798ca)).
 
 -   **`--force`:** Skip convergence checks and run VASP even if the
     directory already contains converged output.
@@ -164,8 +164,9 @@ Before submission, `gorun` runs the following steps in order:
     now.
 5.  Input sanitization :: Cleans `INCAR`, `POSCAR`, `KPOINTS`
     (newlines, BOMs, blank lines).
-6.  POTCAR generation :: Uses ASE to generate `POTCAR` from `POSCAR`.
-    Skips if `--keep_potcar` is set.
+6.  POTCAR generation :: Generates `POTCAR` from `POSCAR` using ASE
+    with VASP-recommended pseudopotentials (PBE functional).  Skips if
+    `--keep_potcar` is set.
 7.  vdW kernel :: Copies `vdw_kernel.bindat` from `$VASP_PATH` if the
     INCAR requests vdW corrections.
 8.  Cleanup :: Removes old SLURM log files and zero-size VASP outputs.
