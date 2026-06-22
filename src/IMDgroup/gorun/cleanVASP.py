@@ -192,7 +192,14 @@ def generate_potcar(path='.', keep_existing=False) -> None:
             print(f'{path}: Not updating existing POTCAR.')
             return
         atoms = ase.io.vasp.read_vasp(poscar_path)
-        calc_temp = Vasp(xc='PBE', setups={'base': 'recommended'})
+        calc_temp = Vasp(
+            xc='PBE',
+            setups={
+            'base': 'recommended',
+            # ASE bug - dictionary not updated and
+            # W_sv is recommended on
+            # https://vasp.at/wiki/index.php/Available_pseudopotentials
+            'W': 'W_sv'})
         calc_temp.initialize(atoms)
         size_before = 0
         prev_potcar = None
