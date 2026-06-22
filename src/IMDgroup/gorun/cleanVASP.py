@@ -199,7 +199,7 @@ def generate_potcar(path='.', keep_existing=False) -> None:
             # ASE bug - dictionary not updated and
             # W_sv is recommended on
             # https://vasp.at/wiki/index.php/Available_pseudopotentials
-            'W': 'W_sv'})
+            'W': '_sv'})
         calc_temp.initialize(atoms)
         size_before = 0
         prev_potcar = None
