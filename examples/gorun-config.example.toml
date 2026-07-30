@@ -79,7 +79,7 @@ nodes = 1
 
 [helios]
 queues = ['plgrid', 'plgrid-long']
-VASP-setup = "module load GCC/13.2.0 OpenMPI/5.0.3 OpenBLAS/0.3.24 ScaLAPACK/2.2.0-fb FFTW/3.3.10"
+VASP-setup = 'module load intel-compilers/2023.2.1 impi/2021.10.0 imkl/2023.2.0; export I_MPI_HYDRA_BOOTSTRAP="${I_MPI_HYDRA_BOOTSTRAP:-slurm}"; export I_MPI_FABRICS="${I_MPI_FABRICS:-shm:ofi}"; export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"; export OMP_STACKSIZE="${OMP_STACKSIZE:-512m}"'
 # https://docs.cyfronet.pl/display/~plgpawlik/Helios#Helios-Samplejobscripts
 shebang = '#!/bin/bash -l'
 
