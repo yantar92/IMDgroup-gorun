@@ -3,18 +3,22 @@
 # IMDgroup-gorun
 
 This package provides a set of scripts for supercomputer job
-submission for VASP, MACE fine-tuning, and ATAT via [Slurm](https://slurm.schedmd.com/). It is
-tailored to research performed in the [Inverse Materials Design group](https://www.oimalyi.org/),
-creating a unified interface for running calculations across
-different high-performance computing clusters (e.g., Athena, Ares,
-Helios, LUMI).
+submission for VASP, MACE multihead fine-tuning, and ATAT via
+[Slurm](https://slurm.schedmd.com/). It is tailored to research performed in the
+[Inverse Materials Design group](https://www.oimalyi.org/), creating a unified interface for
+running calculations across different high-performance computing
+clusters (e.g., Athena, Ares, Helios, LUMI).
 
 
 # Installation
 
     git clone https://git.sr.ht/~yantar92/IMDgroup-gorun
     cd IMDgroup-gorun
-    pip install .
+    pip install ".[mace]"
+
+The `[mace]` extra installs `pandas` and `scikit-learn`, required for
+MACE fine-tuning (`.pkl` reading and train/val splitting).  Omit it
+if you only need VASP or ATAT support.
 
 
 # Configuration
@@ -104,7 +108,7 @@ the time limit:
 
 -   **`--mark`:** Prepare the directory and create a `gorun_ready` marker
     file, but do not submit. Use `gorun-all-ready.sh` to submit
-    multiple marked directories later (see [5](#org0e86202)).
+    multiple marked directories later (see [5](#org05b3d74)).
 
 -   **`--force`:** Skip convergence checks and run VASP even if the
     directory already contains converged output.
@@ -214,19 +218,33 @@ The generated Slurm script exports `VASP_COMMAND` that points back to
 the ASE calculator to invoke.
 
 
-## `gorun mace` / `gorun-mace`
+## `gorun mace-finetune` / `gorun mace` / `gorun-mace`
 
-Submit a MACE fine-tuning job from the current directory.  The
-directory must contain a `result.pkl` file (ASE \`\`Structure\`\` objects
-with energies, forces, and stresses).
+Submit a MACE multihead fine-tuning job.  The canonical subcommand is
+`mace-finetune`; `mace` and the `gorun-mace` entry point are kept for
+backward compatibility and normalize to the same pipeline.
 
-The pipeline has two stages:
+The workflow implements Method 1 from the MACE documentation &ndash; a
+two-stage multihead replay protocol:
 
-1.  `fine_tuning_select` — selects configurations for replay
-    regularization.
-2.  `run_train` — trains the final fine-tuned model.
+1.  `fine_tuning_select` — select replay configurations that best match
+    the target dataset chemistry.
+2.  `run_train` — train with a dual-head architecture (target head +
+    pretraining head) to prevent catastrophic forgetting.
 
 Both stages run sequentially in a single Slurm job.
+
+
+### Escape hatch: RUNFILE
+
+If a `RUNFILE.sh` or `RUNFILE.py` exists in the working directory, its
+content replaces the canned two-stage workflow.  `RUNFILE.sh` takes
+precedence over `RUNFILE.py`.  Both are wrapped so they inherit the
+cluster environment (see [3.2](#org74b8fee)).
+
+Use this when the standard two-stage protocol does not fit your use
+case &ndash; for example, when you want to run `mace.cli.eval` or a custom
+training loop.
 
 
 ### Options
@@ -237,8 +255,25 @@ Both stages run sequentially in a single Slurm job.
 -   **`--replay-xyz PATH` (required):** Path to the replay/reference data
     (`.xyz` file).
 
--   **`--pkl PATH`:** Path to the pickle file with structures (default:
-    `result.pkl`).
+
+### Data source (pick one)
+
+-   **`--data PATH`:** Single training file (`.xyz` or `.pkl`).
+    Split into train/val using `--split-ratio` (default: `0.20`).
+
+-   **`--train-data PATH` + `--val-data PATH`:** Pre-split training and
+    validation files (`.xyz` or `.pkl`).  Both must be provided
+    together.
+
+-   **`--split-ratio FLOAT`:** Fraction of `--data` to use for validation
+    (default: `0.20`).
+
+If neither `--data` nor the pre-split pair is given, the adapter
+expects an existing `train.xyz` in the working directory (use
+`--keep` to preserve it).
+
+
+### Output
 
 -   **`--new-model-name NAME`:** Name for the output fine-tuned model
     (default: `finetuned_model.model`).
@@ -248,15 +283,44 @@ Both stages run sequentially in a single Slurm job.
 
 -   **`--e0s STR`:** E0s string for `heads.json` (default: empty).
 
+
+### Training hyperparameters
+
 -   **`--batch-size N`:** Training batch size (default: `6`).
 
 -   **`--max-epochs N`:** Maximum training epochs (default: `100`).
 
+-   **`--lr FLOAT`:** Learning rate (default: `0.0009`).
+
+-   **`--weight-decay FLOAT`:** Weight decay (default: `5e-9`).
+
+-   **`--valid-fraction FLOAT`:** Fraction of training data for internal
+    validation during training (default: `0.05`).
+
+
+### Stage 1: fine<sub>tuning</sub><sub>select</sub>
+
 -   **`--num-samples N`:** Number of samples for `fine_tuning_select`
     (default: `30000`).
 
+-   **`--subselect METHOD`:** Subselection method for replay data.
+    Choices: `fps` (farthest point sampling), `random` (default:
+    `fps`).
+
+-   **`--filtering-type TYPE`:** Element filtering for replay data.
+    Choices: `combinations`, `exclusive`, `inclusive`, `none`
+    (default: `exclusive`).
+
 -   **`--no-fine-tuning-select`:** Skip the `fine_tuning_select` stage
     (useful if `selected_configs.xyz` already exists).
+
+
+### Hardware
+
+-   **`--device STR`:** Compute device (default: `cuda`).
+
+
+### Shared flags
 
 -   **`--keep FILE`:** Do not regenerate `FILE` if it already exists
     (repeatable).  Useful values: `train.xyz`, `val.xyz`,
@@ -281,44 +345,64 @@ Both stages run sequentially in a single Slurm job.
 
 ### Job Preparation Pipeline
 
-Before submission, `gorun mace` runs the following steps:
+Before submission, `gorun mace-finetune` runs the following steps:
 
 1.  Validation :: Checks that the foundation model and replay data
     exist.
-2.  Data preparation :: Reads `result.pkl`, cleans constraints,
-    splits 80-20, writes `train.xyz` and `val.xyz` (unless
-    `--keep` is set), and generates `heads.json`.
-3.  Backup :: If previous outputs exist (logs, model files), backs
-    up the directory to `gorun_N`.
-4.  Submission :: Generates and submits the two-stage Slurm script.
+2.  Data preparation :: Reads structures from `--data` or
+    `--train-data=/`&ndash;val-data=, strips ASE constraints (preserving
+    forces/energy/stress via `SinglePointCalculator`), splits if
+    needed, writes `train.xyz` and `val.xyz` (unless `--keep` is
+    set), and generates `heads.json`.
+3.  Backup :: If previous outputs exist (logs, model files, checkpoints),
+    backs up the directory to `gorun_N`.
+4.  Submission :: Generates and submits the two-stage Slurm script
+    (or runs the RUNFILE if present).
 
 
 ### Examples
 
-    # Basic fine-tuning
-    gorun mace --model 13_MACE-MATPES-PBE-0_medium.model \
-               --replay-xyz matpes-pbe-replay-data.xyz \
-               --e0s "{3:-0.01686124,6:-1.26246048,11:-0.22829243}"
+    # Basic fine-tuning from a pickle file (auto-split 80-20)
+    gorun mace-finetune \
+        --model 13_MACE-MATPES-PBE-0_medium.model \
+        --replay-xyz matpes-pbe-replay-data.xyz \
+        --data result.pkl \
+        --e0s "{3:-0.01686124,6:-1.26246048,11:-0.22829243}"
     
-    # Skip the select stage, use specific time limit
-    gorun mace --model foundation.model \
-               --replay-xyz replay.xyz \
-               --no-fine-tuning-select \
-               48:00:00
+    # Pre-split train/val files
+    gorun mace-finetune \
+        --model foundation.model \
+        --replay-xyz replay.xyz \
+        --train-data train.xyz --val-data val.xyz
+    
+    # Skip the select stage, specify time limit
+    gorun mace-finetune \
+        --model foundation.model \
+        --replay-xyz replay.xyz \
+        --data result.pkl \
+        --no-fine-tuning-select \
+        48:00:00
     
     # Keep existing xyz files, custom seed and batch size
-    gorun mace --model foundation.model \
-               --replay-xyz replay.xyz \
-               --keep train.xyz --keep val.xyz \
-               --seed 42 --batch-size 4
+    gorun mace-finetune \
+        --model foundation.model \
+        --replay-xyz replay.xyz \
+        --data result.pkl \
+        --keep train.xyz --keep val.xyz \
+        --seed 42 --batch-size 4
     
     # Prepare for later batch submission
-    gorun mace --model foundation.model \
-               --replay-xyz replay.xyz \
-               --mark
+    gorun mace-finetune \
+        --model foundation.model \
+        --replay-xyz replay.xyz \
+        --data result.pkl \
+        --mark
     
-    # Using gorun-mace (equivalent to gorun mace)
-    gorun-mace --model foundation.model --replay-xyz replay.xyz
+    # Backward-compatible shorthand (gorun mace)
+    gorun mace --model foundation.model --replay-xyz replay.xyz --data result.pkl
+    
+    # Backward-compatible entry point (gorun-mace)
+    gorun-mace --model foundation.model --replay-xyz replay.xyz --data result.pkl
 
 
 ## `gorun-maps`
