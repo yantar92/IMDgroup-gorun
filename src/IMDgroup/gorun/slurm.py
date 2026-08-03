@@ -74,16 +74,16 @@ def user_job_count() -> int:
     return int(subprocess.check_output("squeue -u $USER -o %Z | wc -l", shell=True)) - 1
 
 
-def clear_slurm_logs(path='.'):
+def clear_slurm_logs(path='.', extra_logs=None):
     """Clear all the slurm logs in PATH.
+
+    *extra_logs* is an optional list of additional log filenames
+    (e.g., ``["vasp.out"]``) to remove alongside ``slurm-*.out``.
     """
-    # Find all SLURM output files.
-    vaspout = Path(path) / 'vasp.out'
-    if vaspout.is_file():
-        extra_logs = [vaspout]
-    else:
-        extra_logs = []
-    for slurm_file in glob.glob(os.path.join(path, "slurm-*.out")) + extra_logs:
+    extra_files = []
+    if extra_logs:
+        extra_files = [Path(path) / log for log in extra_logs if (Path(path) / log).is_file()]
+    for slurm_file in glob.glob(os.path.join(path, "slurm-*.out")) + extra_files:
         try:
             os.remove(slurm_file)
             print(f"Deleted old SLURM file: {slurm_file}")

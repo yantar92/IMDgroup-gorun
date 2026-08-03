@@ -93,10 +93,13 @@ def get_user_sbatch_args(script_args) -> dict[str, str]:
 
 
 def get_default_job_name():
-    """Generate sensible job name for a given INCAR.
-    """
-    incar = Incar.from_file('INCAR')
-    return {'job-name': incar.get('SYSTEM', 'unknown')}
+    """Generate a sensible job name from INCAR or the current directory."""
+    try:
+        incar = Incar.from_file('INCAR')
+        return {'job-name': incar.get('SYSTEM', 'unknown')}
+    except (FileNotFoundError, OSError):
+        # Fall back to directory name if INCAR is absent (e.g., MACE runs).
+        return {'job-name': os.path.basename(os.getcwd())}
 
 
 def get_sbatch_args(script_args: dict, config: dict,

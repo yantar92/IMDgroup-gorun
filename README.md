@@ -3,10 +3,11 @@
 # IMDgroup-gorun
 
 This package provides a set of scripts for supercomputer job
-submission for VASP and ATAT via [Slurm](https://slurm.schedmd.com/). It is tailored to research
-performed in the [Inverse Materials Design group](https://www.oimalyi.org/), creating a unified
-interface for running calculations across different high-performance
-computing clusters (e.g., Athena, Ares, Helios, LUMI).
+submission for VASP, MACE fine-tuning, and ATAT via [Slurm](https://slurm.schedmd.com/). It is
+tailored to research performed in the [Inverse Materials Design group](https://www.oimalyi.org/),
+creating a unified interface for running calculations across
+different high-performance computing clusters (e.g., Athena, Ares,
+Helios, LUMI).
 
 
 # Installation
@@ -42,13 +43,24 @@ The behavior of `gorun` is defined in a TOML file. This file maps
 hostnames to cluster definitions and specifies available queues,
 modules to load, and default resource limits.
 
+Software-specific settings are namespaced under the server section.
+Legacy flat keys (e.g., `VASP-setup`) are still supported for
+backward compatibility.
+
     [cluster.names]
     lumi = ['uan01', 'uan02']
     
     [lumi]
     queues = ['standard', 'small']
-    VASP-setup = "module load LUMI/24.03 ..."
+    
+    [lumi.vasp]
+    setup = "module load LUMI/24.03 ..."
     mpiexec = "srun"
+    
+    [lumi.mace]
+    setup = "module use /appl/local/laifs/modules && module load lumi-aif-singularity-bindings"
+    sif = "/appl/local/laifs/containers/..."
+    python_env = "/projappl/.../mace_env"
     
     [lumi.standard]
     type = 'CPU'
@@ -60,16 +72,20 @@ modules to load, and default resource limits.
 # Command Line Interface
 
 
-## `gorun`
+## `gorun vasp`
 
-The primary command to submit a VASP job from the current directory.
-Positional arguments specify the number of nodes and the time limit:
+Submit a VASP job from the current directory.  The plain `gorun`
+command (without subcommand) is treated as `gorun vasp` for backward
+compatibility.  Positional arguments specify the number of nodes and
+the time limit:
 
     # Submit job requesting 2 nodes for 24 hours
+    gorun vasp 2 24:00:00
+    # Backward-compatible shorthand:
     gorun 2 24:00:00
     
     # Use default nodes/time from config (positional args optional)
-    gorun
+    gorun vasp
 
 
 ### Options
@@ -88,33 +104,30 @@ Positional arguments specify the number of nodes and the time limit:
 
 -   **`--mark`:** Prepare the directory and create a `gorun_ready` marker
     file, but do not submit. Use `gorun-all-ready.sh` to submit
-    multiple marked directories later (see [5](#orgcf798ca)).
+    multiple marked directories later (see [5](#org0e86202)).
 
 -   **`--force`:** Skip convergence checks and run VASP even if the
     directory already contains converged output.
 
--   **`--keep_potcar`:** Do not regenerate `POTCAR` if it already exists.
+-   **`--keep FILE`:** Do not regenerate `FILE` if it already exists
+    (repeatable).  For VASP, useful values are `POTCAR` and
+    `POSCAR`. Example: `--keep POTCAR --keep POSCAR`.
 
--   **`--keep_poscar`:** Do not copy `CONTCAR` to `POSCAR` if `CONTCAR`
-    is present.
+-   **`--no-clean`:** Skip cleanup of old SLURM log files in NEB
+    subdirectories.
 
--   **`--no_clean`:** Skip cleanup of old SLURM log files and VASP
-    outputs after backing up.
-
--   **`--no_incar_py`:** Ignore `INCAR.py` even if present; run VASP
+-   **`--no-incar-py`:** Ignore `INCAR.py` even if present; run VASP
     directly.
 
--   **`--no_vasp_config`:** Do not source the cluster's VASP module setup
+-   **`--no-vasp-config`:** Do not source the cluster's VASP module setup
     (the `VASP-setup` line from the config). Use when the environment
     is already configured upstream.
 
--   **`--incar` `"KEY:val KEY2:val2"`:** Modify INCAR parameters before
-    submission. Multiple space-separated `KEY:value` pairs. Set `None`
-    as value to delete a key. Before modifying, the current directory
-    is backed up to `gorun_N` (incrementing N) if VASP outputs already
-    exist, preserving the old INCAR and data. Example:
+-   **`--incar KEY:VAL ...`:** Modify INCAR parameters before
+    submission. Space-separated `KEY:VAL` pairs. Set `VAL` to `None`
+    to delete a key. Example:
     
-        gorun --incar="ALGO:Normal NELM:200 NSW:50"
+        gorun vasp --incar ALGO:Normal NELM:200 NSW:50
 
 -   **`--max_slurm_jobs N`:** Wait until the number of running Slurm jobs
     drops below N before submitting (default: 0 = no limit).
@@ -127,25 +140,28 @@ Positional arguments specify the number of nodes and the time limit:
 ### Examples
 
     # Submit to a specific GPU queue with 8 nodes for 48 hours
-    gorun --queue plgrid-gpu-a100 8 48:00:00
+    gorun vasp --queue plgrid-gpu-a100 8 48:00:00
     
     # Use gamma-point-only VASP binary, 1 node, 1 hour
-    gorun --vasp gam 1 1:00:00
+    gorun vasp --vasp gam 1 1:00:00
     
     # Run locally (no sbatch) for quick testing
-    gorun --local 1 0:30:00
+    gorun vasp --local 1 0:30:00
     
     # Prepare directory for later batch submission
-    gorun --mark 4 24:00:00
+    gorun vasp --mark 4 24:00:00
     
     # Override INCAR settings before submission
-    gorun --incar="ISIF:3 NSW:100" 2 24:00:00
+    gorun vasp --incar ISIF:3 NSW:100 2 24:00:00
     
     # Force re-run even if already converged
-    gorun --force 2 24:00:00
+    gorun vasp --force 2 24:00:00
     
     # Limit concurrent jobs to 20
-    gorun --max_slurm_jobs 20 2 24:00:00
+    gorun vasp --max-slurm-jobs 20 2 24:00:00
+    
+    # Keep existing POTCAR (and use --keep for POSCAR too)
+    gorun vasp --keep POTCAR --keep POSCAR
 
 
 ### Job Preparation Pipeline
@@ -194,8 +210,115 @@ The script has the calculator pre-configured and can access a
     energy = atoms.get_potential_energy()
 
 The generated Slurm script exports `VASP_COMMAND` that points back to
-`gorun --local --no_incar_py --force --no_clean --keep_poscar` for
+`gorun vasp --local --no-incar-py --force --no-clean --keep POSCAR` for
 the ASE calculator to invoke.
+
+
+## `gorun mace` / `gorun-mace`
+
+Submit a MACE fine-tuning job from the current directory.  The
+directory must contain a `result.pkl` file (ASE \`\`Structure\`\` objects
+with energies, forces, and stresses).
+
+The pipeline has two stages:
+
+1.  `fine_tuning_select` — selects configurations for replay
+    regularization.
+2.  `run_train` — trains the final fine-tuned model.
+
+Both stages run sequentially in a single Slurm job.
+
+
+### Options
+
+-   **`--model PATH` (required):** Path to the foundation model
+    (`.model` file).
+
+-   **`--replay-xyz PATH` (required):** Path to the replay/reference data
+    (`.xyz` file).
+
+-   **`--pkl PATH`:** Path to the pickle file with structures (default:
+    `result.pkl`).
+
+-   **`--new-model-name NAME`:** Name for the output fine-tuned model
+    (default: `finetuned_model.model`).
+
+-   **`--seed N`:** Random seed for train/val split and training
+    (default: `1`).
+
+-   **`--e0s STR`:** E0s string for `heads.json` (default: empty).
+
+-   **`--batch-size N`:** Training batch size (default: `6`).
+
+-   **`--max-epochs N`:** Maximum training epochs (default: `100`).
+
+-   **`--num-samples N`:** Number of samples for `fine_tuning_select`
+    (default: `30000`).
+
+-   **`--no-fine-tuning-select`:** Skip the `fine_tuning_select` stage
+    (useful if `selected_configs.xyz` already exists).
+
+-   **`--keep FILE`:** Do not regenerate `FILE` if it already exists
+    (repeatable).  Useful values: `train.xyz`, `val.xyz`,
+    `heads.json`.
+
+-   **`--time_limit HH:MM:SS`:** Time limit (optional; defaults come
+    from config).
+
+-   **`--queue NAME`:** Submit to a specific queue (default:
+    auto-select earliest finish).
+
+-   **`--mark`:** Prepare directory and create a `gorun_ready` marker
+    without submitting.
+
+-   **`--local`:** Run directly on the login node (for testing).
+
+-   **`--force`:** Skip convergence checks.
+
+-   **`--max-slurm-jobs N`:** Wait until running Slurm jobs drop below
+    N (default: 0 = no limit).
+
+
+### Job Preparation Pipeline
+
+Before submission, `gorun mace` runs the following steps:
+
+1.  Validation :: Checks that the foundation model and replay data
+    exist.
+2.  Data preparation :: Reads `result.pkl`, cleans constraints,
+    splits 80-20, writes `train.xyz` and `val.xyz` (unless
+    `--keep` is set), and generates `heads.json`.
+3.  Backup :: If previous outputs exist (logs, model files), backs
+    up the directory to `gorun_N`.
+4.  Submission :: Generates and submits the two-stage Slurm script.
+
+
+### Examples
+
+    # Basic fine-tuning
+    gorun mace --model 13_MACE-MATPES-PBE-0_medium.model \
+               --replay-xyz matpes-pbe-replay-data.xyz \
+               --e0s "{3:-0.01686124,6:-1.26246048,11:-0.22829243}"
+    
+    # Skip the select stage, use specific time limit
+    gorun mace --model foundation.model \
+               --replay-xyz replay.xyz \
+               --no-fine-tuning-select \
+               48:00:00
+    
+    # Keep existing xyz files, custom seed and batch size
+    gorun mace --model foundation.model \
+               --replay-xyz replay.xyz \
+               --keep train.xyz --keep val.xyz \
+               --seed 42 --batch-size 4
+    
+    # Prepare for later batch submission
+    gorun mace --model foundation.model \
+               --replay-xyz replay.xyz \
+               --mark
+    
+    # Using gorun-mace (equivalent to gorun mace)
+    gorun-mace --model foundation.model --replay-xyz replay.xyz
 
 
 ## `gorun-maps`
@@ -311,7 +434,7 @@ Each sub-job goes through the following checks:
 
 The package includes a companion Bash script `gorun-all-ready.sh` for
 submitting multiple jobs in batch. This is useful when you have many
-directories prepared with `gorun --mark` and want to submit them while
+directories prepared with `gorun vasp --mark` and want to submit them while
 respecting a limit on concurrent Slurm jobs.
 
 

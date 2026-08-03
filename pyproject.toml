@@ -9,7 +9,7 @@ description = "Slurm job submission helpers for Inverse Materials Design group"
 authors = [ {name = "Ihor Radchenko", email = "yantar92@posteo.net"},
 	    {name = "Oleksandr I. Malyi", email = "oleksandrmalyi@gmail.com"}]
 readme = {file = "README.org", content-type = "text/x-org"}
-keywords = ["crystal", "materials", "science", "cluster", "VASP", "slurm", "ase"]
+keywords = ["crystal", "materials", "science", "cluster", "VASP", "MACE", "slurm", "ase"]
 classifiers = [
 	    "Development Status :: 2 - Pre-Alpha",
             "Environment :: Console",
@@ -21,7 +21,7 @@ classifiers = [
             "Topic :: Scientific/Engineering :: Chemistry",
             "Topic :: Scientific/Engineering :: Information Analysis",
             "Topic :: Scientific/Engineering :: Physics"]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [ "ase", "termcolor", "IMDgroup-pymatgen", "python-dateutil"]
 
 [project.urls]
@@ -29,9 +29,12 @@ homepage = "https://www.oimalyi.org/"
 
 [project.optional-dependencies]
 dev = ["python-lsp-server[all]"]
+mace = ["pandas", "scikit-learn"]
 
 [project.scripts]
 gorun = "IMDgroup.gorun.gorun:main"
+gorun-mace = "IMDgroup.gorun.gorun:main_mace"
+gorun-mace-finetune = "IMDgroup.gorun.gorun:main_mace"
 gorun-atat-local = "IMDgroup.gorun.gorun_atat_local:main"
 gorun-maps = "IMDgroup.gorun.gorun_maps:main"
 
@@ -45,11 +48,13 @@ script-files = ["scripts/gorun-all-ready.sh"]
 exclude = ["tests"]
 where = ["src/"]
 include = [
+	"IMDgroup",
+	"IMDgroup.gorun",
+	"IMDgroup.gorun.core",
+	"IMDgroup.gorun.adapters",
 	"IMDgroup.gorun_maps",
         "IMDgroup.gorun_atat_local",
-        "IMDgroup.gorun",
-        "IMDgroup.sbatch",
-        "IMDGroup"]
+        "IMDgroup.sbatch"]
 
 [tool.pylint]
 source-roots=['./src']

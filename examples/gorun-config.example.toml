@@ -150,3 +150,61 @@ max-jobs = 220
 [lumi.small.sbatch]
 partition = 'small'
 time = '72:00:00'
+
+# -- MACE fine-tuning on LUMI GPU nodes --
+#
+# The ``setup`` string must export two variables:
+#
+#   GORUN_WRAPPER        Launcher prefix including the shell -- e.g.
+#                        ``srun ... singularity run ... bash``.
+#                        When non-empty, the adapter wraps the Python command in::
+#
+#                            ${GORUN_WRAPPER} <<'EOF'
+#                            ${GORUN_INNER_SETUP}
+#                            python -u -m mace.cli.<subcommand> ...
+#                            EOF
+#
+#   GORUN_INNER_SETUP    Commands to run inside the wrapper before Python
+#                        (e.g. ``source .../bin/activate``, venv setup).
+#
+# All other environment variables (PyTorch flags, OpenMP, cache
+# directories, etc.) belong in ``setup`` as regular exports.
+# Nothing is hard-coded by the adapter.
+#
+# On systems without a container, leave GORUN_WRAPPER empty or unset;
+# the adapter runs the Python command directly.
+[lumi.mace]
+setup = """
+module purge
+module use /appl/local/laifs/modules
+module load lumi-aif-singularity-bindings
+
+export GORUN_WRAPPER='srun --ntasks=1 --cpu-bind=cores singularity run /appl/local/laifs/containers/lumi-multitorch-u24r70f21m50t210-20260415_130625/lumi-multitorch-torch-u24r70f21m50t210-20260415_130625.sif bash'
+export GORUN_INNER_SETUP='source /projappl/project_465002777/usuga/mace/mace_env/bin/activate'
+
+# PyTorch / CUDA tuning
+export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK}"
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True,max_split_size_mb:512"
+export TORCHINDUCTOR_CUDAGRAPH_SKIP_DYNAMIC_GRAPHS=1
+export TORCH_WARN_ON_WEIGHTS_ONLY=0
+export PYTHONUNBUFFERED=1
+"""
+
+[lumi.small-g]
+type = 'GPU'
+partition = 'small-g'
+max-nodes = 2
+max-cpus-per-node = 1
+max-gpus-per-node = 8
+max-time = '72:00:00'
+max-jobs = 2
+
+[lumi.small-g.sbatch]
+partition = 'small-g'
+nodes = 1
+ntasks = 1
+cpus-per-task = 4
+gpus = 1
+mem = '60G'
+time = '72:00:00'
+account = 'project_465002777'
