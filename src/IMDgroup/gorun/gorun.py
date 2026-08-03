@@ -42,7 +42,7 @@ from termcolor import colored
 
 from IMDgroup.gorun.core.pipeline import dispatch_run
 from IMDgroup.gorun.adapters.vasp import VaspAdapter
-from IMDgroup.gorun.adapters.mace import MaceFinetuneAdapter
+from IMDgroup.gorun.adapters.mace import MaceMultiheadFinetuneAdapter
 from IMDgroup.gorun.adapters.maps_adapter import MapsAdapter
 from IMDgroup.gorun.adapters.atat_local import AtatLocalAdapter
 
@@ -168,13 +168,20 @@ def _build_parser() -> argparse.ArgumentParser:
     mace_parser = subparsers.add_parser(
         "mace-finetune",
         parents=[shared],
-        help="Submit a MACE fine-tuning job.",
-        description="Queue a MACE fine-tuning run from the current directory.",
+        help="Submit a MACE multihead fine-tuning job.",
+        description="Queue a MACE multihead fine-tuning run from the current directory.",
+        epilog=(
+            "Escape hatch:\n"
+            "  Place RUNFILE.sh or RUNFILE.py in the working directory to\n"
+            "  override the canned two-stage workflow.  RUNFILE.sh takes\n"
+            "  precedence over RUNFILE.py."
+        ),
     )
     mace_parser.add_argument(
         "time_limit", nargs="?", default=None,
         help="Time limit in HH:MM:SS (optional; defaults come from config).",
     )
+    # -- Required ----------------------------------------------------
     mace_parser.add_argument(
         "--model", required=True,
         help="Path to the foundation model (.model file).",
@@ -183,10 +190,25 @@ def _build_parser() -> argparse.ArgumentParser:
         "--replay-xyz", required=True,
         help="Path to the replay/reference data (.xyz file).",
     )
-    mace_parser.add_argument(
-        "--pkl", default="result.pkl",
-        help="Path to the pickle file with Structures (default: result.pkl).",
+    # -- Data source ------------------------------------------------
+    data_group = mace_parser.add_argument_group("data source (pick one)")
+    data_group.add_argument(
+        "--data",
+        help="Training data file (.xyz or .pkl).  Split into train/val using --split-ratio.",
     )
+    data_group.add_argument(
+        "--train-data",
+        help="Pre-split training file (.xyz or .pkl).  Requires --val-data.",
+    )
+    data_group.add_argument(
+        "--val-data",
+        help="Pre-split validation file (.xyz or .pkl).  Requires --train-data.",
+    )
+    data_group.add_argument(
+        "--split-ratio", type=float, default=0.20,
+        help="Fraction of --data to use for validation (default: 0.20).",
+    )
+    # -- Output -----------------------------------------------------
     mace_parser.add_argument(
         "--new-model-name", default="finetuned_model.model",
         help="Name for the output fine-tuned model (default: finetuned_model.model).",
@@ -199,6 +221,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--e0s", default="",
         help="E0s string for heads.json (default: empty).",
     )
+    # -- Training ---------------------------------------------------
     mace_parser.add_argument(
         "--batch-size", type=int, default=6,
         help="Training batch size (default: 6).",
@@ -208,12 +231,40 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Maximum training epochs (default: 100).",
     )
     mace_parser.add_argument(
+        "--lr", type=float, default=0.0009,
+        help="Learning rate (default: 0.0009).",
+    )
+    mace_parser.add_argument(
+        "--weight-decay", type=float, default=5e-9,
+        help="Weight decay (default: 5e-9).",
+    )
+    mace_parser.add_argument(
+        "--valid-fraction", type=float, default=0.05,
+        help="Fraction of training data for internal validation (default: 0.05).",
+    )
+    # -- Stage 1: fine_tuning_select --------------------------------
+    mace_parser.add_argument(
         "--num-samples", type=int, default=30000,
         help="Number of samples for fine_tuning_select (default: 30000).",
     )
     mace_parser.add_argument(
+        "--subselect", choices=["fps", "random"], default="fps",
+        help="Subselection method for replay data (default: fps).",
+    )
+    mace_parser.add_argument(
+        "--filtering-type",
+        choices=["combinations", "exclusive", "inclusive", "none"],
+        default="exclusive",
+        help="Element filtering for replay data (default: exclusive).",
+    )
+    mace_parser.add_argument(
         "--no-fine-tuning-select", action="store_true",
         help="Skip the fine_tuning_select stage.",
+    )
+    # -- Hardware ---------------------------------------------------
+    mace_parser.add_argument(
+        "--device", default="cuda",
+        help="Compute device (default: cuda).",
     )
 
     # ---- maps ----
@@ -343,19 +394,28 @@ def _make_vasp_adapter(args: argparse.Namespace) -> VaspAdapter:
     )
 
 
-def _make_mace_adapter(args: argparse.Namespace) -> MaceFinetuneAdapter:
-    """Build a MaceFinetuneAdapter from parsed CLI args."""
-    return MaceFinetuneAdapter(
+def _make_mace_adapter(args: argparse.Namespace) -> MaceMultiheadFinetuneAdapter:
+    """Build a MaceMultiheadFinetuneAdapter from parsed CLI args."""
+    return MaceMultiheadFinetuneAdapter(
         model_path=args.model,
         replay_xyz=args.replay_xyz,
-        pkl_path=args.pkl,
+        data_path=args.data,
+        train_data_path=args.train_data,
+        val_data_path=args.val_data,
+        split_ratio=args.split_ratio,
         new_model_name=args.new_model_name,
         seed=args.seed,
         e0s=args.e0s,
         batch_size=args.batch_size,
         max_num_epochs=args.max_epochs,
+        valid_fraction=args.valid_fraction,
+        lr=args.lr,
+        weight_decay=args.weight_decay,
         num_samples=args.num_samples,
+        subselect=args.subselect,
+        filtering_type=args.filtering_type,
         no_fine_tuning_select=args.no_fine_tuning_select,
+        device=args.device,
     )
 
 

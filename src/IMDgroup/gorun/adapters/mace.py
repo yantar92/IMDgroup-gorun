@@ -22,7 +22,19 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""MACE fine-tuning adapter for gorun."""
+"""MACE multihead fine-tuning adapter for gorun.
+
+Implements the two-stage multihead replay fine-tuning protocol
+(Method 1 from the MACE documentation):
+
+1. ``fine_tuning_select`` -- select replay configurations that best
+   match the target dataset chemistry.
+2. ``run_train`` -- train with a dual-head architecture (target head +
+   pretraining head) to prevent catastrophic forgetting.
+
+Place a ``RUNFILE.sh`` or ``RUNFILE.py`` in the working directory to
+override the canned stages with a custom script.
+"""
 
 from __future__ import annotations
 
@@ -31,7 +43,7 @@ from pathlib import Path
 
 import pandas as pd
 from ase.calculators.singlepoint import SinglePointCalculator
-from ase.io import write
+from ase.io import read, write
 from sklearn.model_selection import train_test_split
 
 from IMDgroup.gorun.core.files import maybe_regenerate
@@ -75,46 +87,176 @@ def _wrap_command(command: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# MaceFinetuneAdapter
+# Data reading helpers
+# ---------------------------------------------------------------------------
+
+def _read_structures(filepath: str) -> list:
+    """Read ASE Atoms from *filepath*, auto-detecting format.
+
+    Supports ``.xyz`` (extxyz) and ``.pkl`` (pandas DataFrame with a
+    ``structure`` column).
+    """
+    suffix = Path(filepath).suffix.lower()
+    if suffix == ".pkl":
+        df = pd.read_pickle(filepath)
+        return list(df.structure)
+    if suffix == ".xyz":
+        return read(filepath, index=":")
+    raise ValueError(
+        f"Unsupported file format '{suffix}' for {filepath}.  "
+        "Expected .xyz or .pkl."
+    )
+
+
+def _strip_constraints(structures: list) -> int:
+    """Remove ASE constraints from *structures* in place.
+
+    Forces, energy, and stress are preserved via
+    ``SinglePointCalculator`` before the constraints are deleted.
+
+    Returns the number of structures that had constraints removed.
+    """
+    count = 0
+    for atoms in structures:
+        if len(atoms.constraints) == 0:
+            continue
+        forces_raw = atoms.get_forces(apply_constraint=False)
+        energy_raw = atoms.get_potential_energy()
+        stress_raw = atoms.get_stress(apply_constraint=False)
+        del atoms.constraints
+        atoms.calc = SinglePointCalculator(
+            atoms,
+            energy=energy_raw,
+            forces=forces_raw,
+            stress=stress_raw,
+        )
+        count += 1
+    return count
+
+
+# ---------------------------------------------------------------------------
+# MaceMultiheadFinetuneAdapter
 # ---------------------------------------------------------------------------
 
 
-class MaceFinetuneAdapter:
-    """``gorun mace`` backend for fine-tuning a foundation model."""
+class MaceMultiheadFinetuneAdapter:
+    """``gorun mace`` backend for multihead fine-tuning of a foundation model.
+
+    Two-stage workflow (override with ``RUNFILE.sh`` or ``RUNFILE.py``):
+
+    1. ``mace.cli.fine_tuning_select`` -- select replay configurations.
+    2. ``mace.cli.run_train`` -- dual-head training.
+
+    Data sources are specified via one of:
+
+    - ``--data`` + ``--split-ratio``: single file (.xyz or .pkl), auto-split.
+    - ``--train-data`` + ``--val-data``: pre-split files.
+    """
 
     name = "mace"
     log_file = "mace.out"
 
+    # pylint: disable=too-many-locals
     def __init__(
         self, *,
+        # Data sources --------------------------------------------------
         model_path: str,
         replay_xyz: str,
-        pkl_path: str = "result.pkl",
+        data_path: str | None = None,
+        train_data_path: str | None = None,
+        val_data_path: str | None = None,
+        split_ratio: float = 0.20,
+        # Output --------------------------------------------------------
         new_model_name: str = "finetuned_model.model",
         seed: int = 1,
         e0s: str = "",
+        # Training hyperparameters --------------------------------------
         batch_size: int = 6,
         max_num_epochs: int = 100,
-        num_samples: int = 30000,
+        valid_fraction: float = 0.05,
+        lr: float = 0.0009,
+        weight_decay: float = 5e-9,
+        energy_weight: float = 1.0,
+        forces_weight: float = 10.0,
+        stress_weight: float = 10.0,
+        # SWA -----------------------------------------------------------
+        swa: bool = True,
+        swa_lr: float = 0.0001,
+        start_swa: int = 40,
+        swa_energy_weight: float = 10.0,
+        swa_forces_weight: float = 10.0,
+        swa_stress_weight: float = 10.0,
+        # EMA -----------------------------------------------------------
+        ema: bool = True,
+        ema_decay: float = 0.99999,
+        # Multihead -----------------------------------------------------
+        force_mh_ft_lr: bool = True,
+        # Stage 1: fine_tuning_select -----------------------------------
         no_fine_tuning_select: bool = False,
+        num_samples: int = 30000,
+        subselect: str = "fps",
+        filtering_type: str = "exclusive",
+        weight_pt: float = 1.0,
+        weight_ft: float = 10.0,
+        # Hardware & precision ------------------------------------------
+        device: str = "cuda",
+        default_dtype: str = "float64",
+        # Loss ----------------------------------------------------------
+        compute_stress: bool = True,
+        loss: str = "stress",
     ) -> None:
+        # Data
         self.model_path = model_path
         self.replay_xyz = replay_xyz
-        self.pkl_path = pkl_path
+        self.data_path = data_path
+        self.train_data_path = train_data_path
+        self.val_data_path = val_data_path
+        self.split_ratio = split_ratio
+        # Output
         self.new_model_name = new_model_name
         self.seed = seed
         self.e0s = e0s
+        # Training
         self.batch_size = batch_size
         self.max_num_epochs = max_num_epochs
-        self.num_samples = num_samples
+        self.valid_fraction = valid_fraction
+        self.lr = lr
+        self.weight_decay = weight_decay
+        self.energy_weight = energy_weight
+        self.forces_weight = forces_weight
+        self.stress_weight = stress_weight
+        # SWA
+        self.swa = swa
+        self.swa_lr = swa_lr
+        self.start_swa = start_swa
+        self.swa_energy_weight = swa_energy_weight
+        self.swa_forces_weight = swa_forces_weight
+        self.swa_stress_weight = swa_stress_weight
+        # EMA
+        self.ema = ema
+        self.ema_decay = ema_decay
+        # Multihead
+        self.force_mh_ft_lr = force_mh_ft_lr
+        # Stage 1
         self.no_fine_tuning_select = no_fine_tuning_select
+        self.num_samples = num_samples
+        self.subselect = subselect
+        self.filtering_type = filtering_type
+        self.weight_pt = weight_pt
+        self.weight_ft = weight_ft
+        # Hardware
+        self.device = device
+        self.default_dtype = default_dtype
+        # Loss
+        self.compute_stress = compute_stress
+        self.loss = loss
 
     # ------------------------------------------------------------------
     # Environment
     # ------------------------------------------------------------------
 
     def validate_environment(self) -> None:
-        """Check that the foundation model and replay data exist."""
+        """Check that required external files exist."""
         missing = []
         for label, path in [
             ("foundation model", self.model_path),
@@ -132,8 +274,12 @@ class MaceFinetuneAdapter:
     # ------------------------------------------------------------------
 
     def is_valid_input(self, path: Path) -> bool:
-        pkl = path / self.pkl_path
-        return pkl.is_file()
+        """Return True when at least one data source file exists."""
+        sources = [
+            p for p in (self.data_path, self.train_data_path, self.val_data_path)
+            if p is not None
+        ]
+        return any(Path(p).is_file() for p in sources)
 
     def is_converged(self, path: Path) -> bool:
         """True when the output model file exists and is non-empty."""
@@ -168,28 +314,20 @@ class MaceFinetuneAdapter:
         if keep is None:
             keep = set()
 
-        # train.xyz and val.xyz are generated together.  We cannot
-        # use maybe_regenerate per-file without double-running.
-        train_exists = (path / "train.xyz").is_file()
-        val_exists = (path / "val.xyz").is_file()
-        keep_train = "train.xyz" in keep and train_exists
-        keep_val = "val.xyz" in keep and val_exists
+        train_xyz = path / "train.xyz"
+        val_xyz = path / "val.xyz"
+        keep_train = "train.xyz" in keep and train_xyz.is_file()
+        keep_val = "val.xyz" in keep and val_xyz.is_file()
 
         if keep_train and keep_val:
             print("Keeping existing train.xyz")
             print("Keeping existing val.xyz")
         else:
-            if not keep_train and train_exists:
+            if not keep_train and train_xyz.is_file():
                 print("Regenerating train.xyz")
-            if not keep_val and val_exists:
+            if not keep_val and val_xyz.is_file():
                 print("Regenerating val.xyz")
-            for fname in ("train.xyz", "val.xyz"):
-                if fname in keep and not (path / fname).exists():
-                    print(
-                        f"--keep {fname} requested but {fname} does not exist.  "
-                        "Generating."
-                    )
-            self._split_and_write_xyz(path)
+            self._generate_train_val(path)
 
         # heads.json
         maybe_regenerate(
@@ -197,45 +335,46 @@ class MaceFinetuneAdapter:
             regenerate=lambda: self._write_heads_json(path),
         )
 
-    def _split_and_write_xyz(self, path: Path) -> None:
-        """Read pkl, clean constraints, split 80-20, write xyz files."""
-        pkl_path = path / self.pkl_path
-        print(f"Reading {pkl_path} ...")
-        df = pd.read_pickle(str(pkl_path))
-        structures = list(df.structure)
-        print(f"  {len(structures)} structures loaded")
-
-        # Clean constraints
-        n_constrained = 0
-        for struc in structures:
-            if len(struc.constraints) != 0:
-                n_constrained += 1
-                forces_raw = struc.get_forces(apply_constraint=False)
-                energy_raw = struc.get_potential_energy()
-                stress_raw = struc.get_stress(apply_constraint=False)
-                del struc.constraints
-                struc.calc = SinglePointCalculator(
-                    struc,
-                    energy=energy_raw,
-                    forces=forces_raw,
-                    stress=stress_raw,
+    def _generate_train_val(self, path: Path) -> None:
+        """Read structures from data source(s), strip constraints,
+        split if needed, and write ``train.xyz`` and ``val.xyz``.
+        """
+        if self.train_data_path is not None and self.val_data_path is not None:
+            train = self._read_and_clean(self.train_data_path)
+            val = self._read_and_clean(self.val_data_path)
+        elif self.data_path is not None:
+            structures = self._read_and_clean(self.data_path)
+            train, val = train_test_split(
+                structures, test_size=self.split_ratio,
+                random_state=self.seed,
+            )
+        else:
+            print("No data source specified (--data or --train-data/--val-data).")
+            # Fallback: if train.xyz/val.xyz already exist, skip gracefully.
+            # Otherwise, let the user know.
+            if not (path / "train.xyz").is_file():
+                raise FileNotFoundError(
+                    "No data source provided and train.xyz does not exist.  "
+                    "Specify --data or --train-data/--val-data."
                 )
-        if n_constrained:
-            print(f"  cleaned constraints from {n_constrained} structures")
+            return
 
-        # Split
-        train, val = train_test_split(
-            structures, test_size=0.20, random_state=self.seed,
-        )
-        print(f"  train: {len(train)}  val: {len(val)}")
-
-        # Write
         train_xyz = path / "train.xyz"
         val_xyz = path / "val.xyz"
         write(str(train_xyz), train, format="extxyz")
         write(str(val_xyz), val, format="extxyz")
-        print(f"  wrote {train_xyz}")
-        print(f"  wrote {val_xyz}")
+        print(f"  train: {len(train)} structures → {train_xyz}")
+        print(f"  val:   {len(val)} structures → {val_xyz}")
+
+    def _read_and_clean(self, filepath: str) -> list:
+        """Read structures from *filepath* and strip constraints."""
+        print(f"Reading {filepath} ...")
+        structures = _read_structures(filepath)
+        print(f"  {len(structures)} structures loaded")
+        n_constrained = _strip_constraints(structures)
+        if n_constrained:
+            print(f"  cleaned constraints from {n_constrained} structures")
+        return structures
 
     def _write_heads_json(self, path: Path) -> None:
         """Write ``heads.json`` referencing train/val xyz files."""
@@ -257,8 +396,8 @@ class MaceFinetuneAdapter:
             },
         }
         heads_json = path / "heads.json"
-        with open(heads_json, "w") as f:
-            json.dump(heads, f, indent=2)
+        with open(heads_json, "w") as file:
+            json.dump(heads, file, indent=2)
         print(f"  wrote {heads_json}")
 
     # ------------------------------------------------------------------
@@ -274,8 +413,6 @@ class MaceFinetuneAdapter:
         (PyTorch flags, cache directories, ``OMP_NUM_THREADS``,
         etc.) belong in this string as well -- nothing is hard-coded
         here.
-
-        See ``_wrap_command`` for the generated shell pattern.
         """
         return server_config.get(self.name, {}).get("setup", "")
 
@@ -301,65 +438,76 @@ class MaceFinetuneAdapter:
         if runfile_py.is_file():
             return _wrap_command(f"python -u {runfile_py}")
 
-        # -- Canned fine-tuning stages --
         parts = []
-
         if not self.no_fine_tuning_select:
             parts.append(_wrap_command(self._select_stage(path)))
-
         parts.append(_wrap_command(self._train_stage(path)))
         return "\n\n".join(parts)
 
+    # ------------------------------------------------------------------
+    # Stage commands (private)
+    # ------------------------------------------------------------------
+
     def _select_stage(self, path: Path) -> str:
-        """Stage 1 command: fine_tuning_select."""
+        """Stage 1: ``fine_tuning_select``."""
         return (
             'echo "=== Stage 1: fine_tuning_select ==="\n'
             "python -u -m mace.cli.fine_tuning_select \\\n"
             f"  --configs_pt {self.replay_xyz} \\\n"
             f"  --configs_ft {path / 'train.xyz'} \\\n"
             f"  --num_samples {self.num_samples} \\\n"
-            "  --subselect fps \\\n"
+            f"  --subselect {self.subselect} \\\n"
             f"  --model {self.model_path} \\\n"
             f"  --output {path / 'selected_configs.xyz'} \\\n"
-            "  --filtering_type exclusive \\\n"
+            f"  --filtering_type {self.filtering_type} \\\n"
             "  --head_pt pt_head \\\n"
             "  --head_ft target_head \\\n"
-            "  --weight_pt 1.0 \\\n"
-            "  --device cuda \\\n"
-            "  --weight_ft 10.0 >> log_db"
+            f"  --weight_pt {self.weight_pt} \\\n"
+            f"  --device {self.device} \\\n"
+            f"  --weight_ft {self.weight_ft} >> log_db"
         )
 
     def _train_stage(self, path: Path) -> str:
-        """Stage 2 command: run_train."""
-        heads_path = path / 'heads.json'
+        """Stage 2: ``run_train``."""
+        heads_path = path / "heads.json"
+        flags = []
+
+        if self.swa:
+            flags.extend([
+                "  --swa \\",
+                f"  --swa_lr {self.swa_lr} \\",
+                f"  --start_swa {self.start_swa} \\",
+                f"  --swa_energy_weight {self.swa_energy_weight} \\",
+                f"  --swa_forces_weight {self.swa_forces_weight} \\",
+                f"  --swa_stress_weight {self.swa_stress_weight} \\",
+            ])
+        if self.ema:
+            flags.extend([
+                "  --ema \\",
+                f"  --ema_decay {self.ema_decay} \\",
+            ])
+
         return (
             'echo "=== Stage 2: run_train ==="\n'
             "python -u -m mace.cli.run_train \\\n"
             f"  --name {self.new_model_name} \\\n"
             "  --multiheads_finetuning True \\\n"
             f"  --heads $(cat {heads_path}) \\\n"
-            "  --valid_fraction 0.05 \\\n"
+            f"  --valid_fraction {self.valid_fraction} \\\n"
             f"  --foundation_model {self.model_path} \\\n"
-            "  --energy_weight 1.0 \\\n"
-            "  --forces_weight 10.0 \\\n"
-            "  --stress_weight 10.0 \\\n"
-            "  --swa \\\n"
-            "  --swa_lr 0.0001 \\\n"
-            "  --start_swa 40 \\\n"
-            "  --swa_energy_weight 10.0 \\\n"
-            "  --swa_forces_weight 10.0 \\\n"
-            "  --swa_stress_weight 10.0 \\\n"
-            "  --force_mh_ft_lr=True \\\n"
-            "  --lr 0.0009 \\\n"
-            "  --weight_decay 5e-9 \\\n"
-            "  --ema \\\n"
-            "  --ema_decay 0.99999 \\\n"
-            "  --device cuda \\\n"
-            "  --default_dtype float64 \\\n"
+            f"  --energy_weight {self.energy_weight} \\\n"
+            f"  --forces_weight {self.forces_weight} \\\n"
+            f"  --stress_weight {self.stress_weight} \\\n"
+            + "".join(flags) +
+            f"  --force_mh_ft_lr={self.force_mh_ft_lr} \\\n"
+            f"  --lr {self.lr} \\\n"
+            f"  --weight_decay {self.weight_decay} \\\n"
+            f"  --device {self.device} \\\n"
+            f"  --default_dtype {self.default_dtype} \\\n"
             f"  --max_num_epochs {self.max_num_epochs} \\\n"
             f"  --batch_size {self.batch_size} \\\n"
-            "  --compute_stress True \\\n"
-            "  --loss stress \\\n"
+            f"  --compute_stress {self.compute_stress} \\\n"
+            f"  --loss {self.loss} \\\n"
             f"  --seed {self.seed} >> log_tuning"
         )
 
