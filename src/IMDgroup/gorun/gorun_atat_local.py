@@ -1,10 +1,8 @@
 # MIT License
 #
-# Copyright (c) 2024-2025 Inverse Materials Design Group
+# Copyright (c) 2024-2026 Inverse Materials Design Group
 #
 # Author: Ihor Radchenko <yantar92@posteo.net>
-#
-# This file is a part of IMDgroup-gorun package
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -26,17 +24,20 @@
 
 
 """Run VASP according to ATAT-generated structure.
+
 Use VASP configuration from parent directory as reference.
 Run (1) parent directory configuration; (2) SCF run; (3) Write energy
 or error files.  (4) Mark structures that deviate too much from sublattice
 with error.
 """
 
+from __future__ import annotations
+
 import datetime
-import argparse
 import subprocess
+import sys
+from argparse import Namespace
 from pathlib import Path
-from xml.etree.ElementTree import ParseError
 import numpy as np
 from termcolor import colored
 from IMDgroup.pymatgen.cli.imdg_derive import atat as derive_atat
@@ -48,126 +49,106 @@ from IMDgroup.pymatgen.core.structure import IMDStructure as Structure, structur
 from IMDgroup.pymatgen.io.vasp.vaspdir import IMDGVaspDir
 
 
-def get_args():
-    parser = argparse.ArgumentParser(
-        description="Run VASP in current dir, according to str.out and parent dir.")
+# ---------------------------------------------------------------------------
+# Core logic — callable from adapters
+# ---------------------------------------------------------------------------
 
-    parser.add_argument(
-        "--kpoints",
-        required=True,
-        help="Kpoint density")
-    parser.add_argument(
-        "--frac_tol",
-        default=0,
-        type=float,
-        help="Distance tolerance to reject structure (default: 0 = no rejections)")
-    parser.add_argument(
-        "--max_strain",
-        default=0.1,
-        type=float,
-        help="Maximum strain allowed (default: 0.1)")
-    parser.add_argument(
-        "--skip_relax",
-        help="Whether to skip relaxation run",
-        action="store_true")
-    parser.add_argument(
-        "--sublattice_cutoff",
-        help="Maximum allowed sublattice deviation",
-        type=float,
-        default=None
-    )
-    parser.add_argument(
-        "vasp_command",
-        help="VASP command to run",
-        nargs=argparse.REMAINDER)
-    args = parser.parse_args()
-    return args
+_VASP_COMMAND = ["gorun", "vasp", "--local"]
 
 
-def run_vasp(vasp_command, directory):
-    """Run VASP_COMMAND in DIRECTORY.
-    Return Vasprun object if VASP succeeds and converges and False
-    otherwise.
+def _run_vasp(vasp_command: list[str], directory: str) -> Vasprun | bool:
+    """Run *vasp_command* in *directory*.
+
+    Returns a ``Vasprun`` on success, ``False`` on failure.
     """
-    existing_vaspdir = IMDGVaspDir(Path(directory))
-    if existing_vaspdir.converged:
-        print(f"{directory} already contains converged output. Not running VASP")
+    existing = IMDGVaspDir(Path(directory))
+    if existing.converged:
+        print(f"{directory} already contains converged output.  Not running VASP")
         return Vasprun(Path(directory) / "vasprun.xml")
 
     print(f"{datetime.datetime.now()} Running {vasp_command} in {directory}")
-    result = subprocess.run(
-        vasp_command,
-        shell=False,
-        cwd=directory,
-        check=False,
-    )
+    result = subprocess.run(vasp_command, shell=False, cwd=directory, check=False)
     vaspdir = IMDGVaspDir(Path(directory))
-    if result.returncode != 0 or\
-       (vaspdir['OSZICAR'] and  # exists
-        not (vaspdir.converged_electronic
-             and vaspdir.converged_ionic)):
+    if (result.returncode != 0
+            or (vaspdir['OSZICAR'] is not None
+                and not (vaspdir.converged_electronic and vaspdir.converged_ionic))):
         Path('error').touch()
         Path('error_unconverged').touch()
         return False
-    if not existing_vaspdir.converged_sequence:
+    if not existing.converged_sequence:
         return False
-    if not existing_vaspdir.converged_manual:
+    if not existing.converged_manual:
         return False
     if vaspdir['vasprun.xml'] is None:
         return False
     return vaspdir['vasprun.xml']
 
 
-def main(args=None):
-    if args is None:
-        args = get_args()
+def run_atat_structure(
+    *,
+    kpoints: str,
+    frac_tol: float = 0,
+    max_strain: float = 0.1,
+    skip_relax: bool = False,
+    sublattice_cutoff: float | None = None,
+    vasp_command: list[str] | None = None,
+) -> int:
+    """Process a single ATAT structure in the current directory.
+
+    Called by the ``atat-local`` adapter's heredoc.  Derives ATAT
+    and SCF inputs, runs VASP, validates, and writes an ``energy``
+    file.
+
+    Returns 0 on success, 1 on failure.
+    """
+    if vasp_command is None:
+        vasp_command = _VASP_COMMAND
+
+    # -- derive ATAT input --
     if Path('ATAT').is_dir():
         print(colored("ATAT already exists.  Not modifying", "yellow"))
     else:
-        # Generate VASP input
-        args.atat_structure = "str.out"
-        args.input_directory = "../"
-        args.inherit_prev_incarpy = True
+        args = Namespace(
+            kpoints=kpoints,
+            atat_structure="str.out",
+            input_directory="../",
+            inherit_prev_incarpy=True,
+        )
         inputset_data = derive_atat(args)
         assert len(inputset_data['inputsets']) == 1
         inputset = inputset_data['inputsets'][0]
-        if not structure_is_valid2(inputset.structure, frac_tol=args.frac_tol):
+
+        if not structure_is_valid2(inputset.structure, frac_tol=frac_tol):
             Path('error').touch()
             Path('error_atoms_too_close').touch()
             print(colored("str.out has atoms too close to each other", "red"))
             return 1
-        kpoints = inputset.kpoints
-        assert kpoints is not None
-        kpoints = np.array(kpoints.kpts[0])
-        # We had cases like KPOINTS 2x2x9 (denity=2500)
-        # that distorted energy outputs due to small number (2) of kpoints
-        # along the individual axis.  Filter out such cases as they
-        # lead to energies that are not comparable with kpoint grids with
-        # the same energy for smaller supercells: 11x11x7 (density=2500)
-        if np.all(kpoints > 3) or np.all(kpoints <= 3):
-            pass
-        elif kpoints[kpoints <= 3].size == 1:
-            # According to light testing, a 11x11x2 is convergent.
-            pass
-        else:
+
+        kpts = np.array(inputset.kpoints.kpts[0])
+        if (np.any(kpts <= 3) and not np.all(kpts <= 3)
+                and kpts[kpts <= 3].size > 1):
             Path('error').touch()
             Path('error_kpoints_dim_sparse').touch()
-            print(colored(f"KPOINTS has too few points along one of the axes: {kpoints}", "red"))
+            print(colored(
+                f"KPOINTS has too few points along one of the axes: {kpts}", "red"
+            ))
             return 1
+
         inputset.write_input(output_dir="ATAT")
 
-    # Run VASP
-    if args.skip_relax:
-        print(colored("--skip_relax passed.  Not running relaxation in ./ATAT", "yellow"))
+    # -- relaxation --
+    if skip_relax:
+        print(colored("--skip-relax passed.  Not running relaxation in ./ATAT", "yellow"))
     else:
-        if not run_vasp(args.vasp_command, "ATAT"):
+        run = _run_vasp(vasp_command, "ATAT")
+        if not run:
             return 1
         vaspdir = IMDGVaspDir("ATAT")
         str_before = vaspdir.initial_structure
         str_after = vaspdir.structure
         try:
-            if not atat.check_volume_distortion(str_before, str_after, args.max_strain):
-                print(colored(f"POSCAR->CONTCAR strain exceeds {args.max_strain*100}%", "red"))
+            if not atat.check_volume_distortion(str_before, str_after, max_strain):
+                print(colored(f"POSCAR->CONTCAR strain exceeds {max_strain*100}%", "red"))
                 Path('error').touch()
                 Path('error_strain').touch()
                 return 1
@@ -175,8 +156,7 @@ def main(args=None):
             if not atat.check_sublattice_flip(str_before, str_after, sublattice):
                 print(colored(
                     "POSCAR&CONTCAR flipped sublattice configuration.", "yellow"))
-                sublattice2 =\
-                    atat.fit_sublattice_to_structure(sublattice, str_after)
+                sublattice2 = atat.fit_sublattice_to_structure(sublattice, str_after)
                 if not Path('str.out.old').is_file():
                     Path('str.out').rename('str.out.old')
                     sublattice2.to_file('str.out', fmt='atat')
@@ -184,42 +164,55 @@ def main(args=None):
                 else:
                     print(colored("str.out.old exists.  Not overwriting", "yellow"))
                 sublattice = sublattice2
-            str_after_normalized = str_after.copy()
-            str_after_normalized.lattice = sublattice.lattice
-            dist_sublattice = structure_distance(
-                str_after_normalized, sublattice,
-                # Compare specie-insensitively
-                match_first=True,
-                match_species=False)
-            Path("sublattice_deviation").write_text(
-                f"{dist_sublattice:.4f}\n", encoding='utf-8')
-            if args.sublattice_cutoff is not None:
-                if dist_sublattice >= args.sublattice_cutoff:
-                    print(colored(
-                        f"Sublattice deviation {dist_sublattice:.2f} >= cutoff"
-                        f" {args.sublattice_cutoff:.2f}.  Marking as error", "red"))
-                    Path('error').touch()
-                    Path('error_sublattice').touch()
+            str_after_norm = str_after.copy()
+            str_after_norm.lattice = sublattice.lattice
+            dist = structure_distance(
+                str_after_norm, sublattice,
+                match_first=True, match_species=False,
+            )
+            Path("sublattice_deviation").write_text(f"{dist:.4f}\n", encoding='utf-8')
+            if sublattice_cutoff is not None and dist >= sublattice_cutoff:
+                print(colored(
+                    f"Sublattice deviation {dist:.2f} >= cutoff "
+                    f"{sublattice_cutoff:.2f}.  Marking as error", "red"))
+                Path('error').touch()
+                Path('error_sublattice').touch()
         except Exception as e:
-            print(f"Cought exception while comparing str.out and VASP output: {e}")
+            print(f"Caught exception while comparing str.out and VASP output: {e}")
             print("Continuing anyway, but marking with error")
             Path('error').touch()
             Path('error_structure').touch()
 
+    # -- SCF --
     if Path('ATAT.SCF').is_dir():
         print(colored("ATAT.SCF already exists.  Not modifying", "yellow"))
     else:
-        # Create SCF input
-        args.input_directory = "ATAT"
+        args = Namespace(input_directory="ATAT")
         inputset_data = derive_scf(args)
         assert len(inputset_data['inputsets']) == 1
         inputset = inputset_data['inputsets'][0]
         inputset.write_input(output_dir="ATAT.SCF")
 
-    # Run VASP
-    run = run_vasp(args.vasp_command, "ATAT.SCF")
+    run = _run_vasp(vasp_command, "ATAT.SCF")
     if not run:
         return 1
 
     Path('energy').write_text(f"{float(run.final_energy)}\n")
     return 0
+
+
+# ---------------------------------------------------------------------------
+# CLI entry point (backward-compatible thin wrapper)
+# ---------------------------------------------------------------------------
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Backward-compat entry point; delegates to the ``atat-local`` adapter.
+
+    Called by ``gorun-atat-local`` script.  Forwards to
+    ``gorun.main(["atat-local", "--local"] + argv)``.
+    """
+    from IMDgroup.gorun.gorun import main as gorun_main
+    if argv is None:
+        argv = sys.argv[1:]
+    return gorun_main(["atat-local", "--local"] + argv)

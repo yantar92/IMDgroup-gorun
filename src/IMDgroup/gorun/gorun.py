@@ -43,6 +43,8 @@ from termcolor import colored
 from IMDgroup.gorun.core.pipeline import dispatch_run
 from IMDgroup.gorun.adapters.vasp import VaspAdapter
 from IMDgroup.gorun.adapters.mace import MaceFinetuneAdapter
+from IMDgroup.gorun.adapters.maps_adapter import MapsAdapter
+from IMDgroup.gorun.adapters.atat_local import AtatLocalAdapter
 
 
 # ---------------------------------------------------------------------------
@@ -63,7 +65,7 @@ warnings.showwarning = _showwarning
 # Known subcommands
 # ---------------------------------------------------------------------------
 
-_SUBCOMMANDS = {"vasp", "mace", "mace-finetune"}
+_SUBCOMMANDS = {"vasp", "mace", "mace-finetune", "maps", "atat-local"}
 
 
 def _is_subcommand(name: str) -> bool:
@@ -214,6 +216,74 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Skip the fine_tuning_select stage.",
     )
 
+    # ---- maps ----
+    maps_parser = subparsers.add_parser(
+        "maps",
+        parents=[shared],
+        help="Submit a maps cluster expansion job.",
+        description="Queue an ATAT maps run from the current directory.",
+    )
+    maps_parser.add_argument(
+        "number_of_nodes", nargs="?", default=None,
+        help="Number of nodes (default: 1).",
+    )
+    maps_parser.add_argument(
+        "time_limit", nargs="?", default=None,
+        help="Time limit in HH:MM:SS (optional).",
+    )
+    maps_parser.add_argument(
+        "--kpoints", required=True,
+        help="Kpoint density.",
+    )
+    maps_parser.add_argument(
+        "--frac-tol", type=float, default=0.5,
+        help="Distance tolerance for rejecting structures (default: 0.5).",
+    )
+    maps_parser.add_argument(
+        "--max-strain", type=float, default=0.1,
+        help="Maximum strain allowed (default: 0.1).",
+    )
+    maps_parser.add_argument(
+        "--skip-relax", action="store_true",
+        help="Skip the relaxation run in ATAT.",
+    )
+    maps_parser.add_argument(
+        "--sublattice-cutoff", type=float, default=None,
+        help="Maximum allowed sublattice deviation.",
+    )
+    maps_parser.add_argument(
+        "--maps-args", nargs="+", default=[],
+        help="Extra arguments to pass to the maps command.",
+    )
+
+    # ---- atat-local ----
+    atat_local_parser = subparsers.add_parser(
+        "atat-local",
+        parents=[shared],
+        help="Process a single ATAT structure (called by pollmach).",
+        description="Run VASP on an ATAT-generated structure in the current directory.",
+    )
+    atat_local_parser.add_argument(
+        "--kpoints", required=True,
+        help="Kpoint density.",
+    )
+    atat_local_parser.add_argument(
+        "--frac-tol", type=float, default=0,
+        help="Distance tolerance for rejecting structures (default: 0).",
+    )
+    atat_local_parser.add_argument(
+        "--max-strain", type=float, default=0.1,
+        help="Maximum strain allowed (default: 0.1).",
+    )
+    atat_local_parser.add_argument(
+        "--skip-relax", action="store_true",
+        help="Skip the relaxation run in ATAT.",
+    )
+    atat_local_parser.add_argument(
+        "--sublattice-cutoff", type=float, default=None,
+        help="Maximum allowed sublattice deviation.",
+    )
+
     return parser
 
 
@@ -289,6 +359,31 @@ def _make_mace_adapter(args: argparse.Namespace) -> MaceFinetuneAdapter:
     )
 
 
+def _make_maps_adapter(args: argparse.Namespace) -> MapsAdapter:
+    """Build a MapsAdapter from parsed CLI args."""
+    if args.number_of_nodes is None:
+        args.number_of_nodes = 1
+    return MapsAdapter(
+        kpoints=args.kpoints,
+        frac_tol=args.frac_tol,
+        max_strain=args.max_strain,
+        skip_relax=args.skip_relax,
+        sublattice_cutoff=args.sublattice_cutoff,
+        maps_args=args.maps_args,
+    )
+
+
+def _make_atat_local_adapter(args: argparse.Namespace) -> AtatLocalAdapter:
+    """Build an AtatLocalAdapter from parsed CLI args."""
+    return AtatLocalAdapter(
+        kpoints=args.kpoints,
+        frac_tol=args.frac_tol,
+        max_strain=args.max_strain,
+        skip_relax=args.skip_relax,
+        sublattice_cutoff=args.sublattice_cutoff,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Entry points
 # ---------------------------------------------------------------------------
@@ -308,13 +403,17 @@ def main(argv: list[str] | None = None) -> int:
         adapter = _make_vasp_adapter(args)
     elif args.software == "mace-finetune":
         adapter = _make_mace_adapter(args)
+    elif args.software == "maps":
+        adapter = _make_maps_adapter(args)
+    elif args.software == "atat-local":
+        adapter = _make_atat_local_adapter(args)
     else:
         print(colored(f"Unknown software: {args.software}", "red"))
         return 1
 
-    # Inject number_of_nodes=None into dispatch_run args for MACE
+    # Inject number_of_nodes=None for subcommands that don't use it
     # (get_sbatch_args needs the attribute to exist).
-    if args.software == "mace-finetune":
+    if args.software in ("mace-finetune", "atat-local"):
         args.number_of_nodes = None
 
     return dispatch_run(args, adapter)
