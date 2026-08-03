@@ -32,11 +32,11 @@ dev = ["python-lsp-server[all]"]
 mace = ["pandas", "scikit-learn"]
 
 [project.scripts]
-gorun = "IMDgroup.gorun.gorun:main"
-gorun-mace = "IMDgroup.gorun.gorun:main_mace"
-gorun-mace-finetune = "IMDgroup.gorun.gorun:main_mace"
-gorun-atat-local = "IMDgroup.gorun.gorun_atat_local:main"
-gorun-maps = "IMDgroup.gorun.gorun_maps:main"
+gorun2 = "IMDgroup.gorun.gorun:main"
+gorun2-mace = "IMDgroup.gorun.gorun:main_mace"
+gorun2-mace-finetune = "IMDgroup.gorun.gorun:main_mace"
+gorun2-atat-local = "IMDgroup.gorun.gorun_atat_local:main"
+gorun2-maps = "IMDgroup.gorun.gorun_maps:main"
 
 [tool.uv.sources]
 IMDgroup-pymatgen = { path = "../IMDgroup-pymatgen" }
