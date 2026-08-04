@@ -22,14 +22,21 @@ classifiers = [
             "Topic :: Scientific/Engineering :: Information Analysis",
             "Topic :: Scientific/Engineering :: Physics"]
 requires-python = ">=3.11"
-dependencies = [ "ase", "termcolor", "IMDgroup-pymatgen", "python-dateutil"]
+dependencies = [
+    "ase",
+    "numpy",
+    "pandas",
+    "python-dateutil",
+    "scikit-learn",
+    "termcolor",
+    "IMDgroup-pymatgen",
+]
 
 [project.urls]
 homepage = "https://www.oimalyi.org/"
 
 [project.optional-dependencies]
 dev = ["python-lsp-server[all]"]
-mace = ["pandas", "scikit-learn"]
 
 [project.scripts]
 gorun2 = "IMDgroup.gorun.gorun:main"
