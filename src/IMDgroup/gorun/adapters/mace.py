@@ -209,8 +209,9 @@ class MaceMultiheadFinetuneAdapter:
     name = "mace"
     log_file = "mace.out"
 
-    #: Hardcoded defaults for gorun-specific parameters.
-    #: Used for INCAR.toml bootstrapping and sparse write-back.
+    #: Hardcoded defaults for all parameters.
+    #: Used for INCAR.toml bootstrapping, sparse write-back, and as
+    #: the fallback when a passthrough key is absent from INCAR.toml.
     DEFAULTS: dict[str, object] = {
         # Data sources
         "model_path": "",
@@ -225,6 +226,36 @@ class MaceMultiheadFinetuneAdapter:
         "e0s": "",
         # Workflow
         "no_fine_tuning_select": False,
+        # fine_tuning_select
+        "num_samples": 30000,
+        "subselect": "fps",
+        "filtering_type": "exclusive",
+        "weight_pt": 1.0,
+        "weight_ft": 10.0,
+        # run_train — core
+        "valid_fraction": 0.05,
+        "energy_weight": 1.0,
+        "forces_weight": 10.0,
+        "stress_weight": 10.0,
+        "lr": 0.0009,
+        "weight_decay": 5e-9,
+        "device": "cuda",
+        "default_dtype": "float64",
+        "max_num_epochs": 100,
+        "batch_size": 6,
+        "compute_stress": True,
+        "loss": "stress",
+        "force_mh_ft_lr": True,
+        # run_train — SWA
+        "swa": True,
+        "swa_lr": 0.0001,
+        "start_swa": 40,
+        "swa_energy_weight": 10.0,
+        "swa_forces_weight": 10.0,
+        "swa_stress_weight": 10.0,
+        # run_train — EMA
+        "ema": True,
+        "ema_decay": 0.99999,
     }
 
     #: Parameters that must be non-empty for a valid run.
@@ -559,19 +590,18 @@ class MaceMultiheadFinetuneAdapter:
     def _select_stage(self, path: Path) -> str:
         """Stage 1: ``fine_tuning_select``.
 
-        Reads gorun-specific arguments directly; all other parameters
-        (``num_samples``, ``subselect``, ``filtering_type``,
-        ``weight_pt``, ``weight_ft``, ``device``) are pulled from
-        ``_passthrough_args`` with sensible defaults.
+        All parameters are pulled from ``_passthrough_args`` with
+        defaults from ``DEFAULTS``.
         """
         args = dict(self._passthrough_args)
+        d = self.DEFAULTS
 
-        num_samples = args.pop("num_samples", 30000)
-        subselect = args.pop("subselect", "fps")
-        filtering_type = args.pop("filtering_type", "exclusive")
-        weight_pt = args.pop("weight_pt", 1.0)
-        weight_ft = args.pop("weight_ft", 10.0)
-        device = args.pop("device", "cuda")
+        num_samples = args.pop("num_samples", d["num_samples"])
+        subselect = args.pop("subselect", d["subselect"])
+        filtering_type = args.pop("filtering_type", d["filtering_type"])
+        weight_pt = args.pop("weight_pt", d["weight_pt"])
+        weight_ft = args.pop("weight_ft", d["weight_ft"])
+        device = args.pop("device", d["device"])
 
         rest = _format_cli_args(args)
 
@@ -597,47 +627,48 @@ class MaceMultiheadFinetuneAdapter:
     def _train_stage(self, path: Path) -> str:
         """Stage 2: ``run_train``.
 
-        Reads gorun-specific arguments directly; all training
-        hyperparameters are pulled from ``_passthrough_args`` with
-        sensible defaults.  SWA and EMA are handled as boolean
-        toggle groups (sub-args only emitted when the toggle is on).
+        All hyperparameters are pulled from ``_passthrough_args``
+        with defaults from ``DEFAULTS``.  SWA and EMA are handled as
+        boolean toggle groups (sub-args only emitted when the toggle
+        is on).
         """
         args = dict(self._passthrough_args)
         heads_path = path / "heads.json"
 
         # --- Pop known training parameters with defaults ---
-        valid_fraction = args.pop("valid_fraction", 0.05)
-        energy_weight = args.pop("energy_weight", 1.0)
-        forces_weight = args.pop("forces_weight", 10.0)
-        stress_weight = args.pop("stress_weight", 10.0)
-        lr = args.pop("lr", 0.0009)
-        weight_decay = args.pop("weight_decay", 5e-9)
-        device = args.pop("device", "cuda")
-        default_dtype = args.pop("default_dtype", "float64")
-        max_num_epochs = args.pop("max_num_epochs", 100)
-        batch_size = args.pop("batch_size", 6)
-        compute_stress = args.pop("compute_stress", True)
-        loss = args.pop("loss", "stress")
-        seed = args.pop("seed", 1)
-        fmhft = args.pop("force_mh_ft_lr", True)
+        d = self.DEFAULTS
+        valid_fraction = args.pop("valid_fraction", d["valid_fraction"])
+        energy_weight = args.pop("energy_weight", d["energy_weight"])
+        forces_weight = args.pop("forces_weight", d["forces_weight"])
+        stress_weight = args.pop("stress_weight", d["stress_weight"])
+        lr = args.pop("lr", d["lr"])
+        weight_decay = args.pop("weight_decay", d["weight_decay"])
+        device = args.pop("device", d["device"])
+        default_dtype = args.pop("default_dtype", d["default_dtype"])
+        max_num_epochs = args.pop("max_num_epochs", d["max_num_epochs"])
+        batch_size = args.pop("batch_size", d["batch_size"])
+        compute_stress = args.pop("compute_stress", d["compute_stress"])
+        loss = args.pop("loss", d["loss"])
+        seed = args.pop("seed", self.seed)
+        fmhft = args.pop("force_mh_ft_lr", d["force_mh_ft_lr"])
 
         # --- SWA group ---
         flags: list[str] = []
-        if args.pop("swa", True):
+        if args.pop("swa", d["swa"]):
             flags.extend([
                 "  --swa \\\n",
-                f"  --swa_lr {args.pop('swa_lr', 0.0001)} \\\n",
-                f"  --start_swa {args.pop('start_swa', 40)} \\\n",
-                f"  --swa_energy_weight {args.pop('swa_energy_weight', 10.0)} \\\n",
-                f"  --swa_forces_weight {args.pop('swa_forces_weight', 10.0)} \\\n",
-                f"  --swa_stress_weight {args.pop('swa_stress_weight', 10.0)} \\\n",
+                f"  --swa_lr {args.pop('swa_lr', d['swa_lr'])} \\\n",
+                f"  --start_swa {args.pop('start_swa', d['start_swa'])} \\\n",
+                f"  --swa_energy_weight {args.pop('swa_energy_weight', d['swa_energy_weight'])} \\\n",
+                f"  --swa_forces_weight {args.pop('swa_forces_weight', d['swa_forces_weight'])} \\\n",
+                f"  --swa_stress_weight {args.pop('swa_stress_weight', d['swa_stress_weight'])} \\\n",
             ])
 
         # --- EMA group ---
-        if args.pop("ema", True):
+        if args.pop("ema", d["ema"]):
             flags.extend([
                 "  --ema \\\n",
-                f"  --ema_decay {args.pop('ema_decay', 0.99999)} \\\n",
+                f"  --ema_decay {args.pop('ema_decay', d['ema_decay'])} \\\n",
             ])
 
         # --- Remaining unknown args ---
