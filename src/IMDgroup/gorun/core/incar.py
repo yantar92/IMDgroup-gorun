@@ -82,10 +82,12 @@ def write_incar_toml(
     ``None`` values are skipped (TOML has no ``None`` literal).
     Keys in *always_include* are written even when ``None``.
 
-    In *update* mode (file exists), only keys whose value differs
-    from *defaults* are written.  Keys present in *raw_existing* but
-    absent from *defaults* are preserved as-is (they belong to the
-    user, not the adapter).
+    In *update* mode (file exists), keys whose value differs from
+    *defaults* are written.  Keys that match defaults are still
+    written when they were already present in *raw_existing* (the
+    user put them there explicitly).  Keys present in *raw_existing*
+    but absent from *defaults* are preserved as-is (they belong to
+    the user, not the adapter).
 
     When the resulting content matches the file on disk, no write
     occurs.  When a write does occur, the existing file is backed up
@@ -131,7 +133,7 @@ def write_incar_toml(
                 continue
             merged[key] = val
         elif defaults is not None and key in defaults:
-            if val == defaults[key]:
+            if val == defaults[key] and key not in raw_existing:
                 continue
             merged[key] = val
         else:
