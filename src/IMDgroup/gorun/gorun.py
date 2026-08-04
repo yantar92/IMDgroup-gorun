@@ -40,6 +40,7 @@ import warnings
 
 from termcolor import colored
 
+from IMDgroup.gorun.core.incar import read_incar_toml, write_incar_toml
 from IMDgroup.gorun.core.pipeline import dispatch_run
 from IMDgroup.gorun.adapters.vasp import VaspAdapter
 from IMDgroup.gorun.adapters.mace import MaceMultiheadFinetuneAdapter
@@ -78,14 +79,20 @@ def _is_subcommand(name: str) -> bool:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    """Build the top-level argument parser with ``vasp`` and ``mace`` subcommands."""
+    """Build the top-level argument parser with subcommands.
+
+    MACE-finetune arguments use ``default=argparse.SUPPRESS`` so that
+    ``hasattr`` on the parsed namespace reveals whether a value came
+    from the CLI.  The adapter layer (``_make_mace_adapter``) merges
+    adapter defaults, INCAR.toml, and CLI overrides.
+    """
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     subparsers = parser.add_subparsers(dest="software")
 
-    # -- shared flags (parent parser reused by both subcommands) --
+    ## shared flags (parent parser reused by all subcommands)
     shared = argparse.ArgumentParser(add_help=False)
     shared.add_argument(
         "--force", action="store_true",
@@ -118,7 +125,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Do not regenerate FILE if it already exists (repeatable).",
     )
 
-    # ---- vasp ----
+    ## vasp
     vasp_parser = subparsers.add_parser(
         "vasp",
         parents=[shared],
@@ -164,7 +171,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help=argparse.SUPPRESS,
     )
 
-    # ---- mace-finetune ----
+    ## mace-finetune
     mace_parser = subparsers.add_parser(
         "mace-finetune",
         parents=[shared],
@@ -181,93 +188,96 @@ def _build_parser() -> argparse.ArgumentParser:
         "time_limit", nargs="?", default=None,
         help="Time limit in HH:MM:SS (optional; defaults come from config).",
     )
-    # -- Required ----------------------------------------------------
+    ## Required
     mace_parser.add_argument(
-        "--model", required=True,
-        help="Path to the foundation model (.model file).",
+        "--model-path", default=argparse.SUPPRESS,
+        help="Path to the foundation model (.model file).  "
+        "Required unless set in INCAR.toml.",
     )
     mace_parser.add_argument(
-        "--replay-xyz", required=True,
-        help="Path to the replay/reference data (.xyz file).",
+        "--replay-xyz", default=argparse.SUPPRESS,
+        help="Path to the replay/reference data (.xyz file).  "
+        "Required unless set in INCAR.toml.",
     )
-    # -- Data source ------------------------------------------------
+    ## Data source
     data_group = mace_parser.add_argument_group("data source (pick one)")
     data_group.add_argument(
-        "--data",
+        "--data-path", default=argparse.SUPPRESS,
         help="Training data file (.xyz or .pkl).  Split into train/val using --split-ratio.",
     )
     data_group.add_argument(
-        "--train-data",
-        help="Pre-split training file (.xyz or .pkl).  Requires --val-data.",
+        "--train-data-path", default=argparse.SUPPRESS,
+        help="Pre-split training file (.xyz or .pkl).  Requires --val-data-path.",
     )
     data_group.add_argument(
-        "--val-data",
-        help="Pre-split validation file (.xyz or .pkl).  Requires --train-data.",
+        "--val-data-path", default=argparse.SUPPRESS,
+        help="Pre-split validation file (.xyz or .pkl).  Requires --train-data-path.",
     )
     data_group.add_argument(
-        "--split-ratio", type=float, default=0.20,
-        help="Fraction of --data to use for validation (default: 0.20).",
+        "--split-ratio", type=float, default=argparse.SUPPRESS,
+        help="Fraction of --data-path to use for validation (default: 0.20).",
     )
-    # -- Output -----------------------------------------------------
+    ## Output
     mace_parser.add_argument(
-        "--new-model-name", default="finetuned_model.model",
+        "--new-model-name", default=argparse.SUPPRESS,
         help="Name for the output fine-tuned model (default: finetuned_model.model).",
     )
     mace_parser.add_argument(
-        "--seed", type=int, default=1,
+        "--seed", type=int, default=argparse.SUPPRESS,
         help="Random seed for train/val split and training (default: 1).",
     )
     mace_parser.add_argument(
-        "--e0s", default="",
+        "--e0s", default=argparse.SUPPRESS,
         help="E0s string for heads.json (default: empty).",
     )
-    # -- Training ---------------------------------------------------
+    ## Training
     mace_parser.add_argument(
-        "--batch-size", type=int, default=6,
+        "--batch-size", type=int, default=argparse.SUPPRESS,
         help="Training batch size (default: 6).",
     )
     mace_parser.add_argument(
-        "--max-epochs", type=int, default=100,
+        "--max-num-epochs", type=int, default=argparse.SUPPRESS,
         help="Maximum training epochs (default: 100).",
     )
     mace_parser.add_argument(
-        "--lr", type=float, default=0.0009,
+        "--lr", type=float, default=argparse.SUPPRESS,
         help="Learning rate (default: 0.0009).",
     )
     mace_parser.add_argument(
-        "--weight-decay", type=float, default=5e-9,
+        "--weight-decay", type=float, default=argparse.SUPPRESS,
         help="Weight decay (default: 5e-9).",
     )
     mace_parser.add_argument(
-        "--valid-fraction", type=float, default=0.05,
+        "--valid-fraction", type=float, default=argparse.SUPPRESS,
         help="Fraction of training data for internal validation (default: 0.05).",
     )
-    # -- Stage 1: fine_tuning_select --------------------------------
+    ## Stage 1: fine_tuning_select
     mace_parser.add_argument(
-        "--num-samples", type=int, default=30000,
+        "--num-samples", type=int, default=argparse.SUPPRESS,
         help="Number of samples for fine_tuning_select (default: 30000).",
     )
     mace_parser.add_argument(
-        "--subselect", choices=["fps", "random"], default="fps",
+        "--subselect", choices=["fps", "random"], default=argparse.SUPPRESS,
         help="Subselection method for replay data (default: fps).",
     )
     mace_parser.add_argument(
         "--filtering-type",
         choices=["combinations", "exclusive", "inclusive", "none"],
-        default="exclusive",
+        default=argparse.SUPPRESS,
         help="Element filtering for replay data (default: exclusive).",
     )
     mace_parser.add_argument(
         "--no-fine-tuning-select", action="store_true",
+        default=argparse.SUPPRESS,
         help="Skip the fine_tuning_select stage.",
     )
-    # -- Hardware ---------------------------------------------------
+    ## Hardware
     mace_parser.add_argument(
-        "--device", default="cuda",
+        "--device", default=argparse.SUPPRESS,
         help="Compute device (default: cuda).",
     )
 
-    # ---- maps ----
+    ## maps
     maps_parser = subparsers.add_parser(
         "maps",
         parents=[shared],
@@ -307,7 +317,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Extra arguments to pass to the maps command.",
     )
 
-    # ---- atat-local ----
+    ## atat-local
     atat_local_parser = subparsers.add_parser(
         "atat-local",
         parents=[shared],
@@ -395,28 +405,58 @@ def _make_vasp_adapter(args: argparse.Namespace) -> VaspAdapter:
 
 
 def _make_mace_adapter(args: argparse.Namespace) -> MaceMultiheadFinetuneAdapter:
-    """Build a MaceMultiheadFinetuneAdapter from parsed CLI args."""
-    return MaceMultiheadFinetuneAdapter(
-        model_path=args.model,
-        replay_xyz=args.replay_xyz,
-        data_path=args.data,
-        train_data_path=args.train_data,
-        val_data_path=args.val_data,
-        split_ratio=args.split_ratio,
-        new_model_name=args.new_model_name,
-        seed=args.seed,
-        e0s=args.e0s,
-        batch_size=args.batch_size,
-        max_num_epochs=args.max_epochs,
-        valid_fraction=args.valid_fraction,
-        lr=args.lr,
-        weight_decay=args.weight_decay,
-        num_samples=args.num_samples,
-        subselect=args.subselect,
-        filtering_type=args.filtering_type,
-        no_fine_tuning_select=args.no_fine_tuning_select,
-        device=args.device,
-    )
+    """Build a MaceMultiheadFinetuneAdapter from CLI args and INCAR.toml.
+
+    Merge order: adapter defaults → INCAR.toml → explicit CLI flags.
+    TOML keys unknown to the adapter are forwarded as passthrough
+    ``--key value`` flags to ``run_train``.  After construction the
+    merged values are written back to ``INCAR.toml``.
+    """
+    raw_toml = read_incar_toml()
+    defaults = MaceMultiheadFinetuneAdapter.DEFAULTS
+
+    ## Build init kwargs: defaults < TOML < CLI
+    init_kwargs: dict[str, object] = dict(defaults)
+    for key in defaults:
+        if key in raw_toml:
+            init_kwargs[key] = raw_toml[key]
+        if hasattr(args, key):
+            init_kwargs[key] = getattr(args, key)
+
+    adapter = MaceMultiheadFinetuneAdapter(**init_kwargs)
+
+    ## Route remaining TOML keys: gorun-level → warning, unknown → passthrough
+    gorun_dests = frozenset({
+        'software', 'force', 'local', 'mark', 'max_slurm_jobs',
+        'queue', 'config', 'keep', 'time_limit', 'number_of_nodes',
+    })
+    extra_toml: dict[str, object] = {}
+    gorun_in_toml: list[str] = []
+    for key, val in raw_toml.items():
+        if key in defaults:
+            continue
+        if key in gorun_dests:
+            gorun_in_toml.append(key)
+            continue
+        extra_toml[key] = val
+
+    if gorun_in_toml:
+        print(colored(
+            'INCAR.toml: ignoring gorun-level keys: '
+            + ', '.join(sorted(gorun_in_toml)),
+            'yellow',
+        ))
+
+    if extra_toml:
+        adapter.apply_kwargs(extra_toml)
+
+    adapter.validate()
+
+    ## Write back merged values
+    merged = {key: getattr(adapter, key) for key in defaults}
+    write_incar_toml(merged, raw_existing=raw_toml, defaults=defaults)
+
+    return adapter
 
 
 def _make_maps_adapter(args: argparse.Namespace) -> MapsAdapter:
@@ -451,6 +491,9 @@ def _make_atat_local_adapter(args: argparse.Namespace) -> AtatLocalAdapter:
 
 def main(argv: list[str] | None = None) -> int:
     """Parse args, build adapter, and dispatch."""
+    if argv is None:
+        argv = sys.argv[1:]
+
     args = _parse_args(argv)
 
     # Subcommand not given?  Show help rather than failing silently.

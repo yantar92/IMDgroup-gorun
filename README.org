@@ -46,8 +46,6 @@ hostnames to cluster definitions and specifies available queues,
 modules to load, and default resource limits.
 
 Software-specific settings are namespaced under the server section.
-Legacy flat keys (e.g., ~VASP-setup~) are still supported for
-backward compatibility.
 
 #+begin_src toml
   [cluster.names]
@@ -77,14 +75,13 @@ backward compatibility.
 ** ~gorun vasp~
 
 Submit a VASP job from the current directory.  The plain ~gorun~
-command (without subcommand) is treated as ~gorun vasp~ for backward
-compatibility.  Positional arguments specify the number of nodes and
-the time limit:
+command (without subcommand) is treated as ~gorun vasp~.  Positional
+arguments specify the number of nodes and the time limit:
 
 #+begin_src bash
   # Submit job requesting 2 nodes for 24 hours
   gorun vasp 2 24:00:00
-  # Backward-compatible shorthand:
+  # Shorthand:
   gorun 2 24:00:00
 
   # Use default nodes/time from config (positional args optional)
@@ -220,8 +217,7 @@ the ASE calculator to invoke.
 ** ~gorun mace-finetune~ / ~gorun mace~ / ~gorun-mace~
 
 Submit a MACE multihead fine-tuning job.  The canonical subcommand is
-~mace-finetune~; ~mace~ and the ~gorun-mace~ entry point are kept for
-backward compatibility and normalize to the same pipeline.
+~mace-finetune~.
 
 The workflow implements Method 1 from the MACE documentation -- a
 two-stage multihead replay protocol:
@@ -233,7 +229,7 @@ two-stage multihead replay protocol:
 
 Both stages run sequentially in a single Slurm job.
 
-*** Escape hatch: RUNFILE
+*** Custom protocol: RUNFILE
 
 If a ~RUNFILE.sh~ or ~RUNFILE.py~ exists in the working directory, its
 content replaces the canned two-stage workflow.  ~RUNFILE.sh~ takes
@@ -244,27 +240,69 @@ Use this when the standard two-stage protocol does not fit your use
 case -- for example, when you want to run ~mace.cli.eval~ or a custom
 training loop.
 
+*** Parameter file: INCAR.toml
+
+All MACE parameters can be stored in an =INCAR.toml= file in the
+working directory, analogous to how VASP reads =INCAR=.  This avoids
+repeating long CLI invocations and keeps the run configuration
+alongside the data.
+
+=INCAR.toml= uses flat TOML with keys matching the attribute names
+(underscores).  For example:
+
+#+begin_src toml
+model_path = "13_MACE-MATPES-PBE-0_medium.model"
+replay_xyz = "matpes-pbe-replay-data.xyz"
+data_path = "result.pkl"
+e0s = "{3:-0.01686124,6:-1.26246048,11:-0.22829243}"
+batch_size = 8
+max_num_epochs = 200
+#+end_src
+
+Any parameter the adapter knows about can be set here, including ones
+without a corresponding CLI flag (e.g., =energy_weight=, =swa_lr=,
+=ema=).  Unknown keys are forwarded to ~run_train~ as ~--key value~
+flags, so future MACE CLI additions work without code changes.
+
+When no =INCAR.toml= exists, ~gorun mace-finetune~ bootstraps a full
+template with every parameter at its default value.  You can then edit
+the file to adjust parameters.
+
+*Precedence*: CLI arguments override =INCAR.toml= values, which
+override hardcoded adapter defaults.  For example, with =INCAR.toml=
+setting =batch_size = 8=, running =gorun mace-finetune= uses 8.
+Adding =--batch-size 16= overrides to 16.
+
+*Write-back*: After parsing, if the merged parameters differ from the
+existing file, =INCAR.toml= is updated (with the previous version
+backed up to =INCAR.toml.old=).  Only parameters whose value differs
+from the adapter default are written; the file stays sparse.
+
+Non-adapter keys in =INCAR.toml= (e.g., =notes = "my experiment"=) are
+preserved across writes.  Gorun-level flags (=force=, =local=,
+=keep=, etc.) in =INCAR.toml= trigger a warning and are ignored.
+
 *** Options
 
-- =--model PATH= (required) :: Path to the foundation model
-  (=.model= file).
+- =--model-path PATH= :: Path to the foundation model (=.model= file).
+  Required unless set in =INCAR.toml=.
 
-- =--replay-xyz PATH= (required) :: Path to the replay/reference data
-  (=.xyz= file).
+- =--replay-xyz PATH= :: Path to the replay/reference data (=.xyz=
+  file).  Required unless set in =INCAR.toml=.
 
 *** Data source (pick one)
 
-- =--data PATH= :: Single training file (=.xyz= or =.pkl=).
+- =--data-path PATH= :: Single training file (=.xyz= or =.pkl=).
   Split into train/val using =--split-ratio= (default: =0.20=).
 
-- =--train-data PATH= + =--val-data PATH= :: Pre-split training and
+- =--train-data-path PATH= + =--val-data-path PATH= :: Pre-split training and
   validation files (=.xyz= or =.pkl=).  Both must be provided
   together.
 
-- =--split-ratio FLOAT= :: Fraction of =--data= to use for validation
+- =--split-ratio FLOAT= :: Fraction of =--data-path= to use for validation
   (default: =0.20=).
 
-If neither =--data= nor the pre-split pair is given, the adapter
+If neither =--data-path= nor the pre-split pair is given, the adapter
 expects an existing =train.xyz= in the working directory (use
 =--keep= to preserve it).
 
@@ -282,7 +320,7 @@ expects an existing =train.xyz= in the working directory (use
 
 - =--batch-size N= :: Training batch size (default: =6=).
 
-- =--max-epochs N= :: Maximum training epochs (default: =100=).
+- =--max-num-epochs N= :: Maximum training epochs (default: =100=).
 
 - =--lr FLOAT= :: Learning rate (default: =0.0009=).
 
@@ -337,16 +375,20 @@ expects an existing =train.xyz= in the working directory (use
 
 Before submission, ~gorun mace-finetune~ runs the following steps:
 
-1. Validation :: Checks that the foundation model and replay data
-   exist.
-2. Data preparation :: Reads structures from =--data= or
-   =--train-data=/=--val-data=, strips ASE constraints (preserving
+1. INCAR.toml :: Reads =INCAR.toml= (if present) and merges values
+   with CLI arguments.  Bootstraps a template file if none exists.
+   Writes back changes if parameters differ.
+2. Validation :: Checks that required parameters (=model_path=,
+   =replay_xyz=) are set and that the foundation model and replay
+   data exist.
+3. Data preparation :: Reads structures from =--data-path= or
+   =--train-data-path= / =--val-data-path=, strips ASE constraints (preserving
    forces/energy/stress via =SinglePointCalculator=), splits if
    needed, writes =train.xyz= and =val.xyz= (unless =--keep= is
    set), and generates =heads.json=.
-3. Backup :: If previous outputs exist (logs, model files, checkpoints),
+4. Backup :: If previous outputs exist (logs, model files, checkpoints),
    backs up the directory to =gorun_N=.
-4. Submission :: Generates and submits the two-stage Slurm script
+5. Submission :: Generates and submits the two-stage Slurm script
    (or runs the RUNFILE if present).
 
 *** Examples
@@ -354,45 +396,55 @@ Before submission, ~gorun mace-finetune~ runs the following steps:
 #+begin_src bash
   # Basic fine-tuning from a pickle file (auto-split 80-20)
   gorun mace-finetune \
-      --model 13_MACE-MATPES-PBE-0_medium.model \
+      --model-path 13_MACE-MATPES-PBE-0_medium.model \
       --replay-xyz matpes-pbe-replay-data.xyz \
-      --data result.pkl \
+      --data-path result.pkl \
       --e0s "{3:-0.01686124,6:-1.26246048,11:-0.22829243}"
 
   # Pre-split train/val files
   gorun mace-finetune \
-      --model foundation.model \
+      --model-path foundation.model \
       --replay-xyz replay.xyz \
-      --train-data train.xyz --val-data val.xyz
+      --train-data-path train.xyz --val-data-path val.xyz
 
   # Skip the select stage, specify time limit
   gorun mace-finetune \
-      --model foundation.model \
+      --model-path foundation.model \
       --replay-xyz replay.xyz \
-      --data result.pkl \
+      --data-path result.pkl \
       --no-fine-tuning-select \
       48:00:00
 
   # Keep existing xyz files, custom seed and batch size
   gorun mace-finetune \
-      --model foundation.model \
+      --model-path foundation.model \
       --replay-xyz replay.xyz \
-      --data result.pkl \
+      --data-path result.pkl \
       --keep train.xyz --keep val.xyz \
       --seed 42 --batch-size 4
 
   # Prepare for later batch submission
   gorun mace-finetune \
-      --model foundation.model \
+      --model-path foundation.model \
       --replay-xyz replay.xyz \
-      --data result.pkl \
+      --data-path result.pkl \
       --mark
 
+  # Use INCAR.toml for almost all parameters
+  gorun mace-finetune 48:00:00
+  # (model_path, replay_xyz, data_path, e0s, etc. read from INCAR.toml)
+
+  # INCAR.toml provides defaults; override batch size from CLI
+  gorun mace-finetune --batch-size 16
+
+  # First run in a directory: bootstraps INCAR.toml with all defaults
+  gorun mace-finetune --model-path foundation.model --replay-xyz replay.xyz --data-path result.pkl
+
   # Backward-compatible shorthand (gorun mace)
-  gorun mace --model foundation.model --replay-xyz replay.xyz --data result.pkl
+  gorun mace --model-path foundation.model --replay-xyz replay.xyz --data-path result.pkl
 
   # Backward-compatible entry point (gorun-mace)
-  gorun-mace --model foundation.model --replay-xyz replay.xyz --data result.pkl
+  gorun-mace --model-path foundation.model --replay-xyz replay.xyz --data-path result.pkl
 #+end_src
 
 ** ~gorun-maps~

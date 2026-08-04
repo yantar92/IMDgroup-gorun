@@ -45,6 +45,7 @@ import pandas as pd
 from ase.calculators.singlepoint import SinglePointCalculator
 from ase.io import read, write
 from sklearn.model_selection import train_test_split
+from termcolor import colored
 
 from IMDgroup.gorun.core.files import maybe_regenerate
 
@@ -149,12 +150,70 @@ class MaceMultiheadFinetuneAdapter:
 
     Data sources are specified via one of:
 
-    - ``--data`` + ``--split-ratio``: single file (.xyz or .pkl), auto-split.
-    - ``--train-data`` + ``--val-data``: pre-split files.
+    - ``--data-path`` + ``--split-ratio``: single file (.xyz or .pkl), auto-split.
+    - ``--train-data-path`` + ``--val-data-path``: pre-split files.
+
+    Parameters beyond those exposed as CLI flags can be set via
+    ``INCAR.toml`` (see :func:`apply_kwargs`).  Unknown keys in
+    ``INCAR.toml`` are forwarded to ``run_train`` as ``--key value``
+    flags, so future MACE CLI additions work without code changes.
     """
 
     name = "mace"
     log_file = "mace.out"
+
+    #: Hardcoded defaults for every parameter the adapter knows about.
+    #: Used for INCAR.toml bootstrapping and sparse write-back.
+    DEFAULTS: dict[str, object] = {
+        # Data sources
+        "model_path": "",
+        "replay_xyz": "",
+        "data_path": None,
+        "train_data_path": None,
+        "val_data_path": None,
+        "split_ratio": 0.20,
+        # Output
+        "new_model_name": "finetuned_model.model",
+        "seed": 1,
+        "e0s": "",
+        # Training
+        "batch_size": 6,
+        "max_num_epochs": 100,
+        "valid_fraction": 0.05,
+        "lr": 0.0009,
+        "weight_decay": 5e-9,
+        "energy_weight": 1.0,
+        "forces_weight": 10.0,
+        "stress_weight": 10.0,
+        # SWA
+        "swa": True,
+        "swa_lr": 0.0001,
+        "start_swa": 40,
+        "swa_energy_weight": 10.0,
+        "swa_forces_weight": 10.0,
+        "swa_stress_weight": 10.0,
+        # EMA
+        "ema": True,
+        "ema_decay": 0.99999,
+        # Multihead
+        "force_mh_ft_lr": True,
+        # Stage 1: fine_tuning_select
+        "no_fine_tuning_select": False,
+        "num_samples": 30000,
+        "subselect": "fps",
+        "filtering_type": "exclusive",
+        "weight_pt": 1.0,
+        "weight_ft": 10.0,
+        # Hardware & precision
+        "device": "cuda",
+        "default_dtype": "float64",
+        # Loss
+        "compute_stress": True,
+        "loss": "stress",
+    }
+
+    #: Parameters that must be non-empty for a valid run.
+    REQUIRED: frozenset[str] = frozenset({"model_path", "replay_xyz"})
 
     # pylint: disable=too-many-locals
     def __init__(
@@ -250,6 +309,56 @@ class MaceMultiheadFinetuneAdapter:
         # Loss
         self.compute_stress = compute_stress
         self.loss = loss
+
+        #: Extra CLI flags to forward to ``run_train`` as ``--key value``.
+        self._passthrough_args: dict[str, object] = {}
+
+    # ------------------------------------------------------------------
+    # Validation
+    # ------------------------------------------------------------------
+
+    def validate(self) -> None:
+        """Check that required parameters are set.
+
+        Raises ``ValueError`` when a required parameter is missing
+        or empty.
+        """
+        missing = []
+        for attr in self.REQUIRED:
+            val = getattr(self, attr, None)
+            if val is None or val == "":
+                missing.append(attr)
+        if missing:
+            raise ValueError(
+                "Missing required MACE parameters: "
+                + ", ".join(missing)
+                + ".  Provide them via CLI or INCAR.toml."
+            )
+        if self.data_path is None and self.train_data_path is None:
+            print(
+                colored(
+                    "No data source specified.  Provide --data-path or --train-data-path/--val-data-path "
+                    "via CLI or INCAR.toml, or place an existing train.xyz in the directory.",
+                    "yellow",
+                )
+            )
+
+    # ------------------------------------------------------------------
+    # Extra kwargs (INCAR.toml passthrough)
+    # ------------------------------------------------------------------
+
+    def apply_kwargs(self, kwargs: dict[str, object]) -> None:
+        """Apply a dict of key-value pairs to the adapter.
+
+        Keys that match an adapter attribute override that attribute.
+        Unknown keys are stored in ``_passthrough_args`` and forwarded
+        to ``run_train`` as ``--key value``.
+        """
+        for key, val in kwargs.items():
+            if hasattr(self, key):
+                setattr(self, key, val)
+            else:
+                self._passthrough_args[key] = val
 
     # ------------------------------------------------------------------
     # Environment
@@ -349,13 +458,13 @@ class MaceMultiheadFinetuneAdapter:
                 random_state=self.seed,
             )
         else:
-            print("No data source specified (--data or --train-data/--val-data).")
+            print("No data source specified (--data-path or --train-data-path/--val-data-path).")
             # Fallback: if train.xyz/val.xyz already exist, skip gracefully.
             # Otherwise, let the user know.
             if not (path / "train.xyz").is_file():
                 raise FileNotFoundError(
                     "No data source provided and train.xyz does not exist.  "
-                    "Specify --data or --train-data/--val-data."
+                    "Specify --data-path or --train-data-path/--val-data-path."
                 )
             return
 
@@ -467,6 +576,20 @@ class MaceMultiheadFinetuneAdapter:
             f"  --weight_ft {self.weight_ft} >> log_db"
         )
 
+    def _passthrough_flags(self) -> str:
+        """Format ``_passthrough_args`` as ``--key value \\`` lines."""
+        if not self._passthrough_args:
+            return ""
+        lines: list[str] = []
+        for key, val in self._passthrough_args.items():
+            cli_key = key.replace("_", "-")
+            if isinstance(val, bool):
+                if val:
+                    lines.append(f"  --{cli_key} \\")
+            else:
+                lines.append(f"  --{cli_key} {val} \\")
+        return "\n".join(lines) + "\n" if lines else ""
+
     def _train_stage(self, path: Path) -> str:
         """Stage 2: ``run_train``."""
         heads_path = path / "heads.json"
@@ -487,6 +610,7 @@ class MaceMultiheadFinetuneAdapter:
                 f"  --ema_decay {self.ema_decay} \\",
             ])
 
+        passthrough = self._passthrough_flags()
         return (
             'echo "=== Stage 2: run_train ==="\n'
             "python -u -m mace.cli.run_train \\\n"
@@ -508,7 +632,9 @@ class MaceMultiheadFinetuneAdapter:
             f"  --batch_size {self.batch_size} \\\n"
             f"  --compute_stress {self.compute_stress} \\\n"
             f"  --loss {self.loss} \\\n"
-            f"  --seed {self.seed} >> log_tuning"
+            f"  --seed {self.seed}"
+            + (f" \\\n{passthrough}" if passthrough else "")
+            + "  >> log_tuning"
         )
 
     # ------------------------------------------------------------------
