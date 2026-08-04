@@ -103,13 +103,31 @@ def get_default_job_name():
 
 
 def get_sbatch_args(script_args: dict, config: dict,
-                    server: str, queue: str) -> dict:
+                    server: str, queue: str,
+                    adapter_name: str | None = None) -> dict:
     """Return a dict of arguments for sbatch command.
     Combine SCRIPT_ARGS with script CONFIG for QUEUE in SERVER.
+
+    When ADAPTER_NAME is given, adapter-specific defaults
+    (``[server.adapter_name.defaults.sbatch]``) are merged on top
+    of the server-level defaults (``[server.defaults.sbatch]``).
+    This lets MACE and VASP target different queues with different
+    resource requests (GPU vs CPU) on the same cluster.
     """
-    return config[server]['defaults']['sbatch'] |\
-        config[server][queue]['sbatch'] |\
-        get_default_job_name() |\
-        get_user_sbatch_args(script_args) |\
-        {'partition': queue}
+    server_defaults = config[server].get('defaults', {}).get('sbatch', {})
+    adapter_defaults = {}
+    if adapter_name:
+        adapter_defaults = (
+            config[server].get(adapter_name, {})
+            .get('defaults', {})
+            .get('sbatch', {})
+        )
+    return (
+        server_defaults
+        | adapter_defaults
+        | config[server][queue]['sbatch']
+        | get_default_job_name()
+        | get_user_sbatch_args(script_args)
+        | {'partition': queue}
+    )
 

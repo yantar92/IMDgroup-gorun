@@ -231,16 +231,18 @@ def dispatch_run(args, adapter: SoftwareAdapter) -> int:
         shebang = config[server].get("shebang", "#!/usr/bin/env bash")
         script = f"{shebang}\n{script_body}"
     else:
+        adapter_cfg = config[server].get(adapter.name, {})
         queues = (
             [args.queue]
             if args.queue
-            else config[server].get("queues", [])
+            else adapter_cfg.get("queues")
+            or config[server].get("queues", [])
         )
         if not queues:
             print(colored("No queues configured for this server.", "red"))
             return 1
         alt_args = [
-            get_sbatch_args(args, config, server, queue_name)
+            get_sbatch_args(args, config, server, queue_name, adapter.name)
             for queue_name in queues
         ]
         shebang = config[server].get("shebang", "#!/usr/bin/env bash")
