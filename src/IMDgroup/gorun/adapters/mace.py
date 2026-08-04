@@ -244,6 +244,8 @@ class MaceMultiheadFinetuneAdapter:
         e0s: str = "",
         # Workflow ------------------------------------------------------
         no_fine_tuning_select: bool = False,
+        # Passthrough ---------------------------------------------------
+        **kwargs: object,
     ) -> None:
         # Data
         self.model_path = model_path
@@ -260,10 +262,9 @@ class MaceMultiheadFinetuneAdapter:
         self.no_fine_tuning_select = no_fine_tuning_select
 
         #: MACE CLI flags to forward to ``run_train`` and
-        #: ``fine_tuning_select`` as ``--key value``.  Populated by
-        #: ``apply_kwargs`` from ``INCAR.toml`` keys that do not match
-        #: an adapter attribute.
-        self._passthrough_args: dict[str, object] = {}
+        #: ``fine_tuning_select`` as ``--key value``.  Populated from
+        #: extra ``**kwargs`` passed to the constructor.
+        self._passthrough_args: dict[str, object] = dict(kwargs)
 
     # ------------------------------------------------------------------
     # Validation
@@ -295,23 +296,6 @@ class MaceMultiheadFinetuneAdapter:
                     "yellow",
                 )
             )
-
-    # ------------------------------------------------------------------
-    # Extra kwargs (INCAR.toml passthrough)
-    # ------------------------------------------------------------------
-
-    def apply_kwargs(self, kwargs: dict[str, object]) -> None:
-        """Apply a dict of key-value pairs to the adapter.
-
-        Keys that match an adapter attribute override that attribute.
-        Unknown keys are stored in ``_passthrough_args`` and forwarded
-        to ``run_train`` and ``fine_tuning_select`` as ``--key value``.
-        """
-        for key, val in kwargs.items():
-            if hasattr(self, key):
-                setattr(self, key, val)
-            else:
-                self._passthrough_args[key] = val
 
     # ------------------------------------------------------------------
     # Environment

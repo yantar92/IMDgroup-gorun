@@ -388,7 +388,7 @@ def _make_mace_adapter(args: argparse.Namespace) -> MaceMultiheadFinetuneAdapter
     raw_toml = read_incar_toml()
     defaults = MaceMultiheadFinetuneAdapter.DEFAULTS
 
-    ## Build init kwargs: defaults < TOML < CLI
+    ## Build init kwargs: defaults < TOML < CLI, then passthrough
     init_kwargs: dict[str, object] = dict(defaults)
     for key in defaults:
         if key in raw_toml:
@@ -396,14 +396,11 @@ def _make_mace_adapter(args: argparse.Namespace) -> MaceMultiheadFinetuneAdapter
         if hasattr(args, key):
             init_kwargs[key] = getattr(args, key)
 
-    adapter = MaceMultiheadFinetuneAdapter(**init_kwargs)
-
     ## Route remaining TOML keys: gorun-level → warning, unknown → passthrough
     gorun_dests = frozenset({
         'software', 'force', 'local', 'mark', 'max_slurm_jobs',
         'queue', 'config', 'keep', 'time_limit', 'number_of_nodes',
     })
-    extra_toml: dict[str, object] = {}
     gorun_in_toml: list[str] = []
     for key, val in raw_toml.items():
         if key in defaults:
@@ -411,7 +408,7 @@ def _make_mace_adapter(args: argparse.Namespace) -> MaceMultiheadFinetuneAdapter
         if key in gorun_dests:
             gorun_in_toml.append(key)
             continue
-        extra_toml[key] = val
+        init_kwargs[key] = val
 
     if gorun_in_toml:
         print(colored(
@@ -420,8 +417,7 @@ def _make_mace_adapter(args: argparse.Namespace) -> MaceMultiheadFinetuneAdapter
             'yellow',
         ))
 
-    if extra_toml:
-        adapter.apply_kwargs(extra_toml)
+    adapter = MaceMultiheadFinetuneAdapter(**init_kwargs)
 
     ## Bootstrap: no INCAR.toml, no MACE CLI args provided, required
     ## params are still empty.  Write a reference INCAR.toml and exit.
