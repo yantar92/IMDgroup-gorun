@@ -362,6 +362,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     if argv and _is_subcommand(argv[0]):
         return _build_parser().parse_args(argv)
 
+    # If --help/-h is present without a subcommand, show top-level help
+    # (avoids the backward-compat fallback that would show vasp help).
+    if "--help" in argv or "-h" in argv:
+        return _build_parser().parse_args(argv)
+
     # Otherwise, treat as ``gorun vasp <argv>`` for backward compat.
     return _build_parser().parse_args(["vasp"] + argv)
 
