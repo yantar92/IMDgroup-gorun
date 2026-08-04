@@ -207,7 +207,6 @@ class MaceMultiheadFinetuneAdapter:
     """
 
     name = "mace"
-    log_file = "mace.out"
 
     #: Hardcoded defaults for all parameters.
     #: Used for INCAR.toml bootstrapping, sparse write-back, and as
@@ -264,20 +263,20 @@ class MaceMultiheadFinetuneAdapter:
     # pylint: disable=too-many-locals
     def __init__(
         self, *,
-        # Data sources --------------------------------------------------
+        # Data sources
         model_path: str,
         replay_xyz: str,
         data_path: str | None = None,
         train_data_path: str | None = None,
         val_data_path: str | None = None,
         split_ratio: float = 0.20,
-        # Output --------------------------------------------------------
+        # Output
         new_model_name: str = "finetuned_model.model",
         seed: int = 1,
         e0s: str = "",
-        # Workflow ------------------------------------------------------
+        # Workflow
         no_fine_tuning_select: bool = False,
-        # Passthrough ---------------------------------------------------
+        # Passthrough
         **kwargs: object,
     ) -> None:
         # Data
@@ -299,10 +298,7 @@ class MaceMultiheadFinetuneAdapter:
         #: extra ``**kwargs`` passed to the constructor.
         self._passthrough_args: dict[str, object] = dict(kwargs)
 
-    # ------------------------------------------------------------------
     # Construction from CLI + INCAR.toml
-    # ------------------------------------------------------------------
-
     @classmethod
     def from_cli_and_toml(cls, args) -> "MaceMultiheadFinetuneAdapter":
         """Build adapter from CLI args and INCAR.toml, writing back merged values.
@@ -338,11 +334,10 @@ class MaceMultiheadFinetuneAdapter:
         cli_mace_args = any(hasattr(args, key) for key in defaults)
         if not raw_toml and not cli_mace_args:
             missing_required = [attr for attr in adapter.REQUIRED
-                               if not getattr(adapter, attr, None)]
+                                if not init_kwargs.get(attr)]
             if missing_required:
-                merged = {key: getattr(adapter, key) for key in defaults}
                 write_incar_toml(
-                    merged, raw_existing=None, defaults=defaults,
+                    init_kwargs, raw_existing=None, defaults=defaults,
                     always_include=adapter.REQUIRED,
                 )
                 print(colored(
@@ -355,8 +350,7 @@ class MaceMultiheadFinetuneAdapter:
         adapter.validate()
 
         # Write back merged values
-        merged = {key: getattr(adapter, key) for key in defaults}
-        write_incar_toml(merged, raw_existing=raw_toml, defaults=defaults)
+        write_incar_toml(init_kwargs, raw_existing=raw_toml, defaults=defaults)
 
         return adapter
 
