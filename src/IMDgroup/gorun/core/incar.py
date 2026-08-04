@@ -77,9 +77,10 @@ def write_incar_toml(
 ) -> None:
     """Write ``INCAR.toml`` with a sparse representation.
 
-    In *bootstrap* mode (no file exists yet), every non-empty adapter
-    default is written so the user can see all available parameters.
-    Keys in *always_include* are written even when empty.
+    In *bootstrap* mode (no file exists yet), every adapter default
+    is written so the user can see all available parameters.
+    ``None`` values are skipped (TOML has no ``None`` literal).
+    Keys in *always_include* are written even when ``None``.
 
     In *update* mode (file exists), only keys whose value differs
     from *defaults* are written.  Keys present in *raw_existing* but
@@ -126,8 +127,7 @@ def write_incar_toml(
         if key in (always_include or set()):
             merged[key] = val
         elif is_bootstrap:
-            # Skip empty placeholders (e.g. model_path = "").
-            if val is None or val == "":
+            if val is None:
                 continue
             merged[key] = val
         elif defaults is not None and key in defaults:
