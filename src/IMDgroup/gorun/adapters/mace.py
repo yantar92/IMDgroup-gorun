@@ -298,15 +298,27 @@ class MaceMultiheadFinetuneAdapter:
         #: extra ``**kwargs`` passed to the constructor.
         self._passthrough_args: dict[str, object] = dict(kwargs)
 
+        #: Raw INCAR.toml content read at construction time, stored
+        #: for later write-back in ``prepare_inputs``.  Empty when
+        #: the adapter is constructed directly (not via
+        #: ``from_cli_and_toml``).
+        self._raw_toml: dict[str, object] = {}
+        #: Merged parameter values (defaults < TOML < CLI), stored
+        #: for later write-back in ``prepare_inputs``.
+        self._merged_kwargs: dict[str, object] = {}
+
     # Construction from CLI + INCAR.toml
     @classmethod
     def from_cli_and_toml(cls, args) -> "MaceMultiheadFinetuneAdapter":
-        """Build adapter from CLI args and INCAR.toml, writing back merged values.
+        """Build adapter from CLI args and INCAR.toml.
 
         Merge order: adapter defaults -> INCAR.toml -> explicit CLI flags.
         TOML keys unknown to the adapter are forwarded as passthrough
-        ``--key value`` flags to ``run_train``.  After construction the
-        merged values are written back to ``INCAR.toml``.
+        ``--key value`` flags to ``run_train``.
+
+        INCAR.toml is not written here; write-back is deferred to
+        ``prepare_inputs`` so the file is not touched when the
+        pipeline exits early (e.g. ``gorun_ready`` already present).
 
         When ``INCAR.toml`` does not exist and required parameters are
         missing, a reference file is written and the program exits.
@@ -329,6 +341,12 @@ class MaceMultiheadFinetuneAdapter:
 
         adapter = cls(**init_kwargs)
 
+        # Store for later write-back in prepare_inputs, so that
+        # INCAR.toml is not touched when gorun_ready is present and
+        # the pipeline exits early.
+        adapter._raw_toml = raw_toml
+        adapter._merged_kwargs = init_kwargs
+
         # Bootstrap: no INCAR.toml, no MACE CLI args, required params still empty.
         # Write a reference INCAR.toml and exit.
         cli_mace_args = any(hasattr(args, key) for key in defaults)
@@ -348,9 +366,6 @@ class MaceMultiheadFinetuneAdapter:
                 sys.exit(0)
 
         adapter.validate()
-
-        # Write back merged values
-        write_incar_toml(init_kwargs, raw_existing=raw_toml, defaults=defaults)
 
         return adapter
 
@@ -446,6 +461,16 @@ class MaceMultiheadFinetuneAdapter:
     ) -> None:
         if keep is None:
             keep = set()
+
+        # Write back merged INCAR.toml.  Deferred here (rather than
+        # in from_cli_and_toml) so that the file is not touched when
+        # dispatch_run exits early due to gorun_ready or RUNNING.
+        if self._merged_kwargs:
+            write_incar_toml(
+                self._merged_kwargs,
+                raw_existing=self._raw_toml,
+                defaults=self.DEFAULTS,
+            )
 
         train_xyz = path / "train.xyz"
         val_xyz = path / "val.xyz"
