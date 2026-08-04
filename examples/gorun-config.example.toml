@@ -202,6 +202,7 @@ max-jobs = 2
 [lumi.small-g.sbatch]
 partition = 'small-g'
 nodes = 1
+ntasks-per-node = 1
 ntasks = 1
 cpus-per-task = 4
 gpus = 1

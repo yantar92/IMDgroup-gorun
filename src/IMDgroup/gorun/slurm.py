@@ -130,6 +130,10 @@ def sbatch_estimate_start(script: str):
                     "date +%Y-%m-%dT%H:%M:%S", shell=True).decode('utf-8').strip()
                 now_time = dateutil.parser.isoparse(now_time_str)
                 return (now_time - now_time, 1)
+            if "Requested node configuration is not available" \
+               in e.output.decode('utf-8'):
+                logger.info("Node config not available for this queue.  Skipping")
+                return None
             print("Failed to execute sbatch in test mode:")
             print(e.output)
             print(f"Script:\n-----\n{script}\n-----\n")

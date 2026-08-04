@@ -578,19 +578,19 @@ class MaceMultiheadFinetuneAdapter:
         flags: list[str] = []
         if args.pop("swa", True):
             flags.extend([
-                "  --swa \\",
-                f"  --swa_lr {args.pop('swa_lr', 0.0001)} \\",
-                f"  --start_swa {args.pop('start_swa', 40)} \\",
-                f"  --swa_energy_weight {args.pop('swa_energy_weight', 10.0)} \\",
-                f"  --swa_forces_weight {args.pop('swa_forces_weight', 10.0)} \\",
-                f"  --swa_stress_weight {args.pop('swa_stress_weight', 10.0)} \\",
+                "  --swa \\\n",
+                f"  --swa_lr {args.pop('swa_lr', 0.0001)} \\\n",
+                f"  --start_swa {args.pop('start_swa', 40)} \\\n",
+                f"  --swa_energy_weight {args.pop('swa_energy_weight', 10.0)} \\\n",
+                f"  --swa_forces_weight {args.pop('swa_forces_weight', 10.0)} \\\n",
+                f"  --swa_stress_weight {args.pop('swa_stress_weight', 10.0)} \\\n",
             ])
 
         # --- EMA group ---
         if args.pop("ema", True):
             flags.extend([
-                "  --ema \\",
-                f"  --ema_decay {args.pop('ema_decay', 0.99999)} \\",
+                "  --ema \\\n",
+                f"  --ema_decay {args.pop('ema_decay', 0.99999)} \\\n",
             ])
 
         # --- Remaining unknown args ---
