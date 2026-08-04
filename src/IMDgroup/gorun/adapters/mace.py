@@ -645,12 +645,4 @@ class MaceMultiheadFinetuneAdapter:
         return [
             "*.tar.gz",
             "gorun_*",
-            "*.xyz",
-            "*.model",
-            "*.model.staged",
-            "checkpoints",
-            "log_tuning",
-            "log_db",
-            "log.out",
-            "log.err",
         ]
