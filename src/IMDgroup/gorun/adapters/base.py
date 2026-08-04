@@ -113,6 +113,9 @@ class SoftwareAdapter(Protocol):
     def backup_excludes(self) -> list[str]:
         """Return rsync ``--exclude`` patterns for the backup step.
 
-        Return patterns like ``["*.tar.gz", "gorun_*", "WAVECAR"]``.
+        Adapter-specific patterns only.  The pipeline unconditionally
+        excludes ``gorun_*`` (previous backups) on top of these.
+
+        Return patterns like ``["WAVECAR"]`` or ``["__*"]``.
         """
         ...

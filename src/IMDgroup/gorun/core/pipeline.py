@@ -110,7 +110,11 @@ def _backup_current_dir(path: Path, excludes: list[str]) -> None:
         gorun_ready.unlink()
 
     to = path / _next_run_folder(path)
-    exclude_args = " ".join(f"--exclude '{pat}'" for pat in excludes)
+    # Always exclude gorun's own backup directories and tarballs
+    # to avoid recursive backups.  Adapter-specific patterns
+    # (e.g. WAVECAR) are appended on top.
+    all_excludes = ["gorun_*"] + list(excludes)
+    exclude_args = " ".join(f"--exclude '{pat}'" for pat in all_excludes)
     subprocess.check_call(
         f"rsync -avq {exclude_args} '{path}/' '{to}/'",
         shell=True,

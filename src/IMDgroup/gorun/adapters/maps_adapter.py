@@ -170,8 +170,6 @@ class MapsAdapter:
 
     def backup_excludes(self) -> list[str]:
         return [
-            "*.tar.gz",
-            "gorun_*",
             "WAVECAR",
             "__*",
         ]

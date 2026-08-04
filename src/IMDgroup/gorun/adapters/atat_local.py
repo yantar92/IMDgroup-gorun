@@ -151,8 +151,4 @@ class AtatLocalAdapter:
     # ------------------------------------------------------------------
 
     def backup_excludes(self) -> list[str]:
-        return [
-            "*.tar.gz",
-            "gorun_*",
-            "WAVECAR",
-        ]
+        return ["WAVECAR"]

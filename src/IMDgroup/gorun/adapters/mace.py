@@ -745,7 +745,4 @@ class MaceMultiheadFinetuneAdapter:
     # ------------------------------------------------------------------
 
     def backup_excludes(self) -> list[str]:
-        return [
-            "*.tar.gz",
-            "gorun_*",
-        ]
+        return []
