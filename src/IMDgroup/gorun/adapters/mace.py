@@ -295,26 +295,10 @@ class MaceMultiheadFinetuneAdapter:
             if hasattr(args, key):
                 init_kwargs[key] = getattr(args, key)
 
-        # Route remaining TOML keys: gorun-level -> warning, unknown -> passthrough
-        gorun_dests = frozenset({
-            'software', 'force', 'local', 'mark', 'max_slurm_jobs',
-            'queue', 'config', 'keep', 'time_limit', 'number_of_nodes',
-        })
-        gorun_in_toml: list[str] = []
         for key, val in raw_toml.items():
             if key in defaults:
                 continue
-            if key in gorun_dests:
-                gorun_in_toml.append(key)
-                continue
             init_kwargs[key] = val
-
-        if gorun_in_toml:
-            print(colored(
-                'INCAR.toml: ignoring gorun-level keys: '
-                + ', '.join(sorted(gorun_in_toml)),
-                'yellow',
-            ))
 
         adapter = cls(**init_kwargs)
 
