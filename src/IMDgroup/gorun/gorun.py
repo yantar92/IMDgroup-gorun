@@ -416,6 +416,9 @@ def _make_mace_adapter(args: argparse.Namespace) -> MaceMultiheadFinetuneAdapter
     TOML keys unknown to the adapter are forwarded as passthrough
     ``--key value`` flags to ``run_train``.  After construction the
     merged values are written back to ``INCAR.toml``.
+
+    When ``INCAR.toml`` does not exist and required parameters are
+    missing, a reference file is written and the program exits.
     """
     raw_toml = read_incar_toml()
     defaults = MaceMultiheadFinetuneAdapter.DEFAULTS
@@ -454,6 +457,25 @@ def _make_mace_adapter(args: argparse.Namespace) -> MaceMultiheadFinetuneAdapter
 
     if extra_toml:
         adapter.apply_kwargs(extra_toml)
+
+    ## Bootstrap: no INCAR.toml, no MACE CLI args provided, required
+    ## params are still empty.  Write a reference INCAR.toml and exit.
+    cli_mace_args = any(hasattr(args, key) for key in defaults)
+    if not raw_toml and not cli_mace_args:
+        missing_required = [attr for attr in adapter.REQUIRED
+                           if not getattr(adapter, attr, None)]
+        if missing_required:
+            merged = {key: getattr(adapter, key) for key in defaults}
+            write_incar_toml(
+                merged, raw_existing=None, defaults=defaults,
+                always_include=adapter.REQUIRED,
+            )
+            print(colored(
+                "Edit INCAR.toml to set the required parameters: "
+                + ", ".join(missing_required),
+                "cyan",
+            ))
+            sys.exit(0)
 
     adapter.validate()
 

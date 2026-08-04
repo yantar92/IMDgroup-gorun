@@ -73,11 +73,13 @@ def write_incar_toml(
     *,
     raw_existing: dict[str, object] | None = None,
     defaults: dict[str, object] | None = None,
+    always_include: set[str] | None = None,
 ) -> None:
     """Write ``INCAR.toml`` with a sparse representation.
 
     In *bootstrap* mode (no file exists yet), every non-empty adapter
     default is written so the user can see all available parameters.
+    Keys in *always_include* are written even when empty.
 
     In *update* mode (file exists), only keys whose value differs
     from *defaults* are written.  Keys present in *raw_existing* but
@@ -101,6 +103,10 @@ def write_incar_toml(
         Hardcoded adapter defaults.  Keys present here are considered
         adapter-owned; only non-default values are written (in update
         mode).  Pass ``None`` to write all *values* as-is.
+    always_include:
+        Keys that must be written even when their value equals the
+        default or is empty.  Used in bootstrap mode to surface
+        required-but-unset parameters.
     """
     if raw_existing is None:
         raw_existing = {}
@@ -117,7 +123,9 @@ def write_incar_toml(
 
     # Add adapter keys.  Bootstrap writes everything; update skips defaults.
     for key, val in values.items():
-        if is_bootstrap:
+        if key in (always_include or set()):
+            merged[key] = val
+        elif is_bootstrap:
             # Skip empty placeholders (e.g. model_path = "").
             if val is None or val == "":
                 continue
