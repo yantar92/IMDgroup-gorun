@@ -34,6 +34,25 @@ Implements the two-stage multihead replay fine-tuning protocol
 
 Place a ``RUNFILE.sh`` or ``RUNFILE.py`` in the working directory to
 override the canned stages with a custom script.
+
+**MACE CLI passthrough**
+
+Only gorun-specific parameters (data sources, output naming, workflow
+control) are exposed as CLI flags and stored in ``INCAR.toml``.
+All other MACE training hyperparameters -- ``batch_size``, ``lr``,
+``device``, ``max_num_epochs``, ``swa``, ``ema``, etc. -- are
+forwarded directly to ``mace.cli.run_train`` and
+``mace.cli.fine_tuning_select`` via ``INCAR.toml``.  Add any key
+that MACE CLI accepts and gorun will pass it through as
+``--key value``.  For example::
+
+    # INCAR.toml
+    model_path = "/path/to/foundation.model"
+    replay_xyz = "/path/to/replay.xyz"
+    data_path = "structures.xyz"
+    batch_size = 12
+    device = "cpu"
+    swa = true
 """
 
 from __future__ import annotations
@@ -136,12 +155,37 @@ def _strip_constraints(structures: list) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Command formatting
+# ---------------------------------------------------------------------------
+
+def _format_cli_args(args: dict[str, object]) -> str:
+    """Format a dict as ``--key value \\`` lines.
+
+    Boolean ``True`` values produce ``--key`` (flag without value).
+    Boolean ``False`` values are silently skipped (they are the
+    default for most CLI flags and passing ``--no-key`` is rarely
+    supported).
+    """
+    if not args:
+        return ""
+    lines: list[str] = []
+    for key, val in args.items():
+        cli_key = key.replace("_", "-")
+        if isinstance(val, bool):
+            if val:
+                lines.append(f"  --{cli_key} \\")
+        else:
+            lines.append(f"  --{cli_key} {val} \\")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # MaceMultiheadFinetuneAdapter
 # ---------------------------------------------------------------------------
 
 
 class MaceMultiheadFinetuneAdapter:
-    """``gorun mace`` backend for multihead fine-tuning of a foundation model.
+    """``gorun mace-finetune`` backend for multihead fine-tuning.
 
     Two-stage workflow (override with ``RUNFILE.sh`` or ``RUNFILE.py``):
 
@@ -150,19 +194,20 @@ class MaceMultiheadFinetuneAdapter:
 
     Data sources are specified via one of:
 
-    - ``--data-path`` + ``--split-ratio``: single file (.xyz or .pkl), auto-split.
+    - ``--data-path`` + ``--split-ratio``: single file (.xyz or .pkl),
+      auto-split.
     - ``--train-data-path`` + ``--val-data-path``: pre-split files.
 
-    Parameters beyond those exposed as CLI flags can be set via
-    ``INCAR.toml`` (see :func:`apply_kwargs`).  Unknown keys in
-    ``INCAR.toml`` are forwarded to ``run_train`` as ``--key value``
-    flags, so future MACE CLI additions work without code changes.
+    MACE training hyperparameters (``batch_size``, ``lr``, ``swa``,
+    ``device``, etc.) are not hard-coded here.  Set them in
+    ``INCAR.toml`` and they are forwarded directly to the MACE CLI
+    commands as ``--key value`` flags.
     """
 
     name = "mace"
     log_file = "mace.out"
 
-    #: Hardcoded defaults for every parameter the adapter knows about.
+    #: Hardcoded defaults for gorun-specific parameters.
     #: Used for INCAR.toml bootstrapping and sparse write-back.
     DEFAULTS: dict[str, object] = {
         # Data sources
@@ -176,40 +221,8 @@ class MaceMultiheadFinetuneAdapter:
         "new_model_name": "finetuned_model.model",
         "seed": 1,
         "e0s": "",
-        # Training
-        "batch_size": 6,
-        "max_num_epochs": 100,
-        "valid_fraction": 0.05,
-        "lr": 0.0009,
-        "weight_decay": 5e-9,
-        "energy_weight": 1.0,
-        "forces_weight": 10.0,
-        "stress_weight": 10.0,
-        # SWA
-        "swa": True,
-        "swa_lr": 0.0001,
-        "start_swa": 40,
-        "swa_energy_weight": 10.0,
-        "swa_forces_weight": 10.0,
-        "swa_stress_weight": 10.0,
-        # EMA
-        "ema": True,
-        "ema_decay": 0.99999,
-        # Multihead
-        "force_mh_ft_lr": True,
-        # Stage 1: fine_tuning_select
+        # Workflow
         "no_fine_tuning_select": False,
-        "num_samples": 30000,
-        "subselect": "fps",
-        "filtering_type": "exclusive",
-        "weight_pt": 1.0,
-        "weight_ft": 10.0,
-        # Hardware & precision
-        "device": "cuda",
-        "default_dtype": "float64",
-        # Loss
-        "compute_stress": True,
-        "loss": "stress",
     }
 
     #: Parameters that must be non-empty for a valid run.
@@ -229,40 +242,8 @@ class MaceMultiheadFinetuneAdapter:
         new_model_name: str = "finetuned_model.model",
         seed: int = 1,
         e0s: str = "",
-        # Training hyperparameters --------------------------------------
-        batch_size: int = 6,
-        max_num_epochs: int = 100,
-        valid_fraction: float = 0.05,
-        lr: float = 0.0009,
-        weight_decay: float = 5e-9,
-        energy_weight: float = 1.0,
-        forces_weight: float = 10.0,
-        stress_weight: float = 10.0,
-        # SWA -----------------------------------------------------------
-        swa: bool = True,
-        swa_lr: float = 0.0001,
-        start_swa: int = 40,
-        swa_energy_weight: float = 10.0,
-        swa_forces_weight: float = 10.0,
-        swa_stress_weight: float = 10.0,
-        # EMA -----------------------------------------------------------
-        ema: bool = True,
-        ema_decay: float = 0.99999,
-        # Multihead -----------------------------------------------------
-        force_mh_ft_lr: bool = True,
-        # Stage 1: fine_tuning_select -----------------------------------
+        # Workflow ------------------------------------------------------
         no_fine_tuning_select: bool = False,
-        num_samples: int = 30000,
-        subselect: str = "fps",
-        filtering_type: str = "exclusive",
-        weight_pt: float = 1.0,
-        weight_ft: float = 10.0,
-        # Hardware & precision ------------------------------------------
-        device: str = "cuda",
-        default_dtype: str = "float64",
-        # Loss ----------------------------------------------------------
-        compute_stress: bool = True,
-        loss: str = "stress",
     ) -> None:
         # Data
         self.model_path = model_path
@@ -275,42 +256,13 @@ class MaceMultiheadFinetuneAdapter:
         self.new_model_name = new_model_name
         self.seed = seed
         self.e0s = e0s
-        # Training
-        self.batch_size = batch_size
-        self.max_num_epochs = max_num_epochs
-        self.valid_fraction = valid_fraction
-        self.lr = lr
-        self.weight_decay = weight_decay
-        self.energy_weight = energy_weight
-        self.forces_weight = forces_weight
-        self.stress_weight = stress_weight
-        # SWA
-        self.swa = swa
-        self.swa_lr = swa_lr
-        self.start_swa = start_swa
-        self.swa_energy_weight = swa_energy_weight
-        self.swa_forces_weight = swa_forces_weight
-        self.swa_stress_weight = swa_stress_weight
-        # EMA
-        self.ema = ema
-        self.ema_decay = ema_decay
-        # Multihead
-        self.force_mh_ft_lr = force_mh_ft_lr
-        # Stage 1
+        # Workflow
         self.no_fine_tuning_select = no_fine_tuning_select
-        self.num_samples = num_samples
-        self.subselect = subselect
-        self.filtering_type = filtering_type
-        self.weight_pt = weight_pt
-        self.weight_ft = weight_ft
-        # Hardware
-        self.device = device
-        self.default_dtype = default_dtype
-        # Loss
-        self.compute_stress = compute_stress
-        self.loss = loss
 
-        #: Extra CLI flags to forward to ``run_train`` as ``--key value``.
+        #: MACE CLI flags to forward to ``run_train`` and
+        #: ``fine_tuning_select`` as ``--key value``.  Populated by
+        #: ``apply_kwargs`` from ``INCAR.toml`` keys that do not match
+        #: an adapter attribute.
         self._passthrough_args: dict[str, object] = {}
 
     # ------------------------------------------------------------------
@@ -337,8 +289,9 @@ class MaceMultiheadFinetuneAdapter:
         if self.data_path is None and self.train_data_path is None:
             print(
                 colored(
-                    "No data source specified.  Provide --data-path or --train-data-path/--val-data-path "
-                    "via CLI or INCAR.toml, or place an existing train.xyz in the directory.",
+                    "No data source specified.  Provide --data-path or "
+                    "--train-data-path/--val-data-path via CLI or INCAR.toml, "
+                    "or place an existing train.xyz in the directory.",
                     "yellow",
                 )
             )
@@ -352,7 +305,7 @@ class MaceMultiheadFinetuneAdapter:
 
         Keys that match an adapter attribute override that attribute.
         Unknown keys are stored in ``_passthrough_args`` and forwarded
-        to ``run_train`` as ``--key value``.
+        to ``run_train`` and ``fine_tuning_select`` as ``--key value``.
         """
         for key, val in kwargs.items():
             if hasattr(self, key):
@@ -403,7 +356,6 @@ class MaceMultiheadFinetuneAdapter:
             path / "selected_configs.xyz",
             path / f"{self.new_model_name}.staged",
         ]
-        # Also check if the final model exists (from a successful run)
         model = path / self.new_model_name
         if model.is_file():
             return True
@@ -458,9 +410,10 @@ class MaceMultiheadFinetuneAdapter:
                 random_state=self.seed,
             )
         else:
-            print("No data source specified (--data-path or --train-data-path/--val-data-path).")
-            # Fallback: if train.xyz/val.xyz already exist, skip gracefully.
-            # Otherwise, let the user know.
+            print(
+                "No data source specified "
+                "(--data-path or --train-data-path/--val-data-path)."
+            )
             if not (path / "train.xyz").is_file():
                 raise FileNotFoundError(
                     "No data source provided and train.xyz does not exist.  "
@@ -537,7 +490,6 @@ class MaceMultiheadFinetuneAdapter:
         Without a RUNFILE, the standard two-stage fine-tuning
         workflow is generated.
         """
-        # -- RUNFILE escape hatch --
         runfile_sh = path / "RUNFILE.sh"
         runfile_py = path / "RUNFILE.py"
 
@@ -558,82 +510,115 @@ class MaceMultiheadFinetuneAdapter:
     # ------------------------------------------------------------------
 
     def _select_stage(self, path: Path) -> str:
-        """Stage 1: ``fine_tuning_select``."""
+        """Stage 1: ``fine_tuning_select``.
+
+        Reads gorun-specific arguments directly; all other parameters
+        (``num_samples``, ``subselect``, ``filtering_type``,
+        ``weight_pt``, ``weight_ft``, ``device``) are pulled from
+        ``_passthrough_args`` with sensible defaults.
+        """
+        args = dict(self._passthrough_args)
+
+        num_samples = args.pop("num_samples", 30000)
+        subselect = args.pop("subselect", "fps")
+        filtering_type = args.pop("filtering_type", "exclusive")
+        weight_pt = args.pop("weight_pt", 1.0)
+        weight_ft = args.pop("weight_ft", 10.0)
+        device = args.pop("device", "cuda")
+
+        rest = _format_cli_args(args)
+
         return (
             'echo "=== Stage 1: fine_tuning_select ==="\n'
             "python -u -m mace.cli.fine_tuning_select \\\n"
             f"  --configs_pt {self.replay_xyz} \\\n"
             f"  --configs_ft {path / 'train.xyz'} \\\n"
-            f"  --num_samples {self.num_samples} \\\n"
-            f"  --subselect {self.subselect} \\\n"
+            f"  --num_samples {num_samples} \\\n"
+            f"  --subselect {subselect} \\\n"
             f"  --model {self.model_path} \\\n"
             f"  --output {path / 'selected_configs.xyz'} \\\n"
-            f"  --filtering_type {self.filtering_type} \\\n"
+            f"  --filtering_type {filtering_type} \\\n"
             "  --head_pt pt_head \\\n"
             "  --head_ft target_head \\\n"
-            f"  --weight_pt {self.weight_pt} \\\n"
-            f"  --device {self.device} \\\n"
-            f"  --weight_ft {self.weight_ft} >> log_db"
+            f"  --weight_pt {weight_pt} \\\n"
+            f"  --device {device} \\\n"
+            f"  --weight_ft {weight_ft}"
+            + (f" \\\n{rest}" if rest else "")
+            + " >> log_db"
         )
 
-    def _passthrough_flags(self) -> str:
-        """Format ``_passthrough_args`` as ``--key value \\`` lines."""
-        if not self._passthrough_args:
-            return ""
-        lines: list[str] = []
-        for key, val in self._passthrough_args.items():
-            cli_key = key.replace("_", "-")
-            if isinstance(val, bool):
-                if val:
-                    lines.append(f"  --{cli_key} \\")
-            else:
-                lines.append(f"  --{cli_key} {val} \\")
-        return "\n".join(lines) + "\n" if lines else ""
-
     def _train_stage(self, path: Path) -> str:
-        """Stage 2: ``run_train``."""
-        heads_path = path / "heads.json"
-        flags = []
+        """Stage 2: ``run_train``.
 
-        if self.swa:
+        Reads gorun-specific arguments directly; all training
+        hyperparameters are pulled from ``_passthrough_args`` with
+        sensible defaults.  SWA and EMA are handled as boolean
+        toggle groups (sub-args only emitted when the toggle is on).
+        """
+        args = dict(self._passthrough_args)
+        heads_path = path / "heads.json"
+
+        # --- Pop known training parameters with defaults ---
+        valid_fraction = args.pop("valid_fraction", 0.05)
+        energy_weight = args.pop("energy_weight", 1.0)
+        forces_weight = args.pop("forces_weight", 10.0)
+        stress_weight = args.pop("stress_weight", 10.0)
+        lr = args.pop("lr", 0.0009)
+        weight_decay = args.pop("weight_decay", 5e-9)
+        device = args.pop("device", "cuda")
+        default_dtype = args.pop("default_dtype", "float64")
+        max_num_epochs = args.pop("max_num_epochs", 100)
+        batch_size = args.pop("batch_size", 6)
+        compute_stress = args.pop("compute_stress", True)
+        loss = args.pop("loss", "stress")
+        seed = args.pop("seed", 1)
+        fmhft = args.pop("force_mh_ft_lr", True)
+
+        # --- SWA group ---
+        flags: list[str] = []
+        if args.pop("swa", True):
             flags.extend([
                 "  --swa \\",
-                f"  --swa_lr {self.swa_lr} \\",
-                f"  --start_swa {self.start_swa} \\",
-                f"  --swa_energy_weight {self.swa_energy_weight} \\",
-                f"  --swa_forces_weight {self.swa_forces_weight} \\",
-                f"  --swa_stress_weight {self.swa_stress_weight} \\",
-            ])
-        if self.ema:
-            flags.extend([
-                "  --ema \\",
-                f"  --ema_decay {self.ema_decay} \\",
+                f"  --swa_lr {args.pop('swa_lr', 0.0001)} \\",
+                f"  --start_swa {args.pop('start_swa', 40)} \\",
+                f"  --swa_energy_weight {args.pop('swa_energy_weight', 10.0)} \\",
+                f"  --swa_forces_weight {args.pop('swa_forces_weight', 10.0)} \\",
+                f"  --swa_stress_weight {args.pop('swa_stress_weight', 10.0)} \\",
             ])
 
-        passthrough = self._passthrough_flags()
+        # --- EMA group ---
+        if args.pop("ema", True):
+            flags.extend([
+                "  --ema \\",
+                f"  --ema_decay {args.pop('ema_decay', 0.99999)} \\",
+            ])
+
+        # --- Remaining unknown args ---
+        rest = _format_cli_args(args)
+
         return (
             'echo "=== Stage 2: run_train ==="\n'
             "python -u -m mace.cli.run_train \\\n"
             f"  --name {self.new_model_name} \\\n"
             "  --multiheads_finetuning True \\\n"
             f"  --heads $(cat {heads_path}) \\\n"
-            f"  --valid_fraction {self.valid_fraction} \\\n"
+            f"  --valid_fraction {valid_fraction} \\\n"
             f"  --foundation_model {self.model_path} \\\n"
-            f"  --energy_weight {self.energy_weight} \\\n"
-            f"  --forces_weight {self.forces_weight} \\\n"
-            f"  --stress_weight {self.stress_weight} \\\n"
+            f"  --energy_weight {energy_weight} \\\n"
+            f"  --forces_weight {forces_weight} \\\n"
+            f"  --stress_weight {stress_weight} \\\n"
             + "".join(flags) +
-            f"  --force_mh_ft_lr={self.force_mh_ft_lr} \\\n"
-            f"  --lr {self.lr} \\\n"
-            f"  --weight_decay {self.weight_decay} \\\n"
-            f"  --device {self.device} \\\n"
-            f"  --default_dtype {self.default_dtype} \\\n"
-            f"  --max_num_epochs {self.max_num_epochs} \\\n"
-            f"  --batch_size {self.batch_size} \\\n"
-            f"  --compute_stress {self.compute_stress} \\\n"
-            f"  --loss {self.loss} \\\n"
-            f"  --seed {self.seed}"
-            + (f" \\\n{passthrough}" if passthrough else "")
+            f"  --force_mh_ft_lr={fmhft} \\\n"
+            f"  --lr {lr} \\\n"
+            f"  --weight_decay {weight_decay} \\\n"
+            f"  --device {device} \\\n"
+            f"  --default_dtype {default_dtype} \\\n"
+            f"  --max_num_epochs {max_num_epochs} \\\n"
+            f"  --batch_size {batch_size} \\\n"
+            f"  --compute_stress {compute_stress} \\\n"
+            f"  --loss {loss} \\\n"
+            f"  --seed {seed}"
+            + (f" \\\n{rest}" if rest else "")
             + "  >> log_tuning"
         )
 

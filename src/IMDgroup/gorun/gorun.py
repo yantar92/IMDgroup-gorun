@@ -178,6 +178,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Submit a MACE multihead fine-tuning job.",
         description="Queue a MACE multihead fine-tuning run from the current directory.",
         epilog=(
+            "MACE training hyperparameters:\n"
+            "  Set batch_size, lr, device, swa, ema, max_num_epochs, and any\n"
+            "  other mace.cli.run_train flag in INCAR.toml.  They are forwarded\n"
+            "  directly as --key value.\n"
+            "\n"
             "Escape hatch:\n"
             "  Place RUNFILE.sh or RUNFILE.py in the working directory to\n"
             "  override the canned two-stage workflow.  RUNFILE.sh takes\n"
@@ -224,57 +229,17 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     mace_parser.add_argument(
         "--seed", type=int, default=argparse.SUPPRESS,
-        help="Random seed for train/val split and training (default: 1).",
+        help="Random seed for train/val split (default: 1).",
     )
     mace_parser.add_argument(
         "--e0s", default=argparse.SUPPRESS,
         help="E0s string for heads.json (default: empty).",
     )
-    ## Training
-    mace_parser.add_argument(
-        "--batch-size", type=int, default=argparse.SUPPRESS,
-        help="Training batch size (default: 6).",
-    )
-    mace_parser.add_argument(
-        "--max-num-epochs", type=int, default=argparse.SUPPRESS,
-        help="Maximum training epochs (default: 100).",
-    )
-    mace_parser.add_argument(
-        "--lr", type=float, default=argparse.SUPPRESS,
-        help="Learning rate (default: 0.0009).",
-    )
-    mace_parser.add_argument(
-        "--weight-decay", type=float, default=argparse.SUPPRESS,
-        help="Weight decay (default: 5e-9).",
-    )
-    mace_parser.add_argument(
-        "--valid-fraction", type=float, default=argparse.SUPPRESS,
-        help="Fraction of training data for internal validation (default: 0.05).",
-    )
-    ## Stage 1: fine_tuning_select
-    mace_parser.add_argument(
-        "--num-samples", type=int, default=argparse.SUPPRESS,
-        help="Number of samples for fine_tuning_select (default: 30000).",
-    )
-    mace_parser.add_argument(
-        "--subselect", choices=["fps", "random"], default=argparse.SUPPRESS,
-        help="Subselection method for replay data (default: fps).",
-    )
-    mace_parser.add_argument(
-        "--filtering-type",
-        choices=["combinations", "exclusive", "inclusive", "none"],
-        default=argparse.SUPPRESS,
-        help="Element filtering for replay data (default: exclusive).",
-    )
+    ## Workflow
     mace_parser.add_argument(
         "--no-fine-tuning-select", action="store_true",
         default=argparse.SUPPRESS,
         help="Skip the fine_tuning_select stage.",
-    )
-    ## Hardware
-    mace_parser.add_argument(
-        "--device", default=argparse.SUPPRESS,
-        help="Compute device (default: cuda).",
     )
 
     ## maps
