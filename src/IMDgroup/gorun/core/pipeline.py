@@ -248,6 +248,8 @@ def dispatch_run(args, adapter: SoftwareAdapter) -> int:
 
     # ---- 9. Submit ----
     if args.mark:
+        with open("sub", "w", encoding="utf-8") as f:
+            f.write(script)
         Path("gorun_ready").touch()
         print(
             colored(
