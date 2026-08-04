@@ -40,7 +40,6 @@ import warnings
 
 from termcolor import colored
 
-from IMDgroup.gorun.core.incar import read_incar_toml, write_incar_toml
 from IMDgroup.gorun.core.pipeline import dispatch_run
 from IMDgroup.gorun.adapters.vasp import VaspAdapter
 from IMDgroup.gorun.adapters.mace import MaceMultiheadFinetuneAdapter
@@ -377,74 +376,11 @@ def _make_vasp_adapter(args: argparse.Namespace) -> VaspAdapter:
 def _make_mace_adapter(args: argparse.Namespace) -> MaceMultiheadFinetuneAdapter:
     """Build a MaceMultiheadFinetuneAdapter from CLI args and INCAR.toml.
 
-    Merge order: adapter defaults → INCAR.toml → explicit CLI flags.
-    TOML keys unknown to the adapter are forwarded as passthrough
-    ``--key value`` flags to ``run_train``.  After construction the
-    merged values are written back to ``INCAR.toml``.
-
-    When ``INCAR.toml`` does not exist and required parameters are
-    missing, a reference file is written and the program exits.
+    Delegates to ``MaceMultiheadFinetuneAdapter.from_cli_and_toml`` which
+    handles INCAR.toml reading, merging (defaults < TOML < CLI), bootstrap,
+    and write-back.
     """
-    raw_toml = read_incar_toml()
-    defaults = MaceMultiheadFinetuneAdapter.DEFAULTS
-
-    ## Build init kwargs: defaults < TOML < CLI, then passthrough
-    init_kwargs: dict[str, object] = dict(defaults)
-    for key in defaults:
-        if key in raw_toml:
-            init_kwargs[key] = raw_toml[key]
-        if hasattr(args, key):
-            init_kwargs[key] = getattr(args, key)
-
-    ## Route remaining TOML keys: gorun-level → warning, unknown → passthrough
-    gorun_dests = frozenset({
-        'software', 'force', 'local', 'mark', 'max_slurm_jobs',
-        'queue', 'config', 'keep', 'time_limit', 'number_of_nodes',
-    })
-    gorun_in_toml: list[str] = []
-    for key, val in raw_toml.items():
-        if key in defaults:
-            continue
-        if key in gorun_dests:
-            gorun_in_toml.append(key)
-            continue
-        init_kwargs[key] = val
-
-    if gorun_in_toml:
-        print(colored(
-            'INCAR.toml: ignoring gorun-level keys: '
-            + ', '.join(sorted(gorun_in_toml)),
-            'yellow',
-        ))
-
-    adapter = MaceMultiheadFinetuneAdapter(**init_kwargs)
-
-    ## Bootstrap: no INCAR.toml, no MACE CLI args provided, required
-    ## params are still empty.  Write a reference INCAR.toml and exit.
-    cli_mace_args = any(hasattr(args, key) for key in defaults)
-    if not raw_toml and not cli_mace_args:
-        missing_required = [attr for attr in adapter.REQUIRED
-                           if not getattr(adapter, attr, None)]
-        if missing_required:
-            merged = {key: getattr(adapter, key) for key in defaults}
-            write_incar_toml(
-                merged, raw_existing=None, defaults=defaults,
-                always_include=adapter.REQUIRED,
-            )
-            print(colored(
-                "Edit INCAR.toml to set the required parameters: "
-                + ", ".join(missing_required),
-                "cyan",
-            ))
-            sys.exit(0)
-
-    adapter.validate()
-
-    ## Write back merged values
-    merged = {key: getattr(adapter, key) for key in defaults}
-    write_incar_toml(merged, raw_existing=raw_toml, defaults=defaults)
-
-    return adapter
+    return MaceMultiheadFinetuneAdapter.from_cli_and_toml(args)
 
 
 def _make_maps_adapter(args: argparse.Namespace) -> MapsAdapter:
