@@ -449,24 +449,38 @@ class MaceMultiheadFinetuneAdapter:
 
         train_xyz = path / "train.xyz"
         val_xyz = path / "val.xyz"
-        keep_train = "train.xyz" in keep and train_xyz.is_file()
-        keep_val = "val.xyz" in keep and val_xyz.is_file()
 
-        if keep_train and keep_val:
-            print("Keeping existing train.xyz")
-            print("Keeping existing val.xyz")
-        else:
-            if not keep_train and train_xyz.is_file():
-                print("Regenerating train.xyz")
-            if not keep_val and val_xyz.is_file():
-                print("Regenerating val.xyz")
-            self._generate_train_val(path)
+        # -- train.xyz / val.xyz --
+        sources = (None if force else self._get_train_val_source_paths())
+        maybe_regenerate(
+            path, ["train.xyz", "val.xyz"], keep,
+            regenerate=lambda: self._generate_train_val(path),
+            older_than=sources,
+        )
 
-        # heads.json
+        # -- heads.json --
         maybe_regenerate(
             path, "heads.json", keep,
             regenerate=lambda: self._write_heads_json(path),
+            older_than=[train_xyz, val_xyz],
         )
+
+    def _get_train_val_source_paths(self) -> list[Path]:
+        """Return paths of source files used to generate train/val."""
+        paths: list[Path] = []
+        if self.data_path is not None:
+            p = Path(self.data_path)
+            if p.is_file():
+                paths.append(p)
+        if self.train_data_path is not None:
+            p = Path(self.train_data_path)
+            if p.is_file():
+                paths.append(p)
+        if self.val_data_path is not None:
+            p = Path(self.val_data_path)
+            if p.is_file():
+                paths.append(p)
+        return paths
 
     def _generate_train_val(self, path: Path) -> None:
         """Read structures from data source(s), strip constraints,
@@ -573,7 +587,14 @@ class MaceMultiheadFinetuneAdapter:
 
         parts = []
         if not self.no_fine_tuning_select:
-            parts.append(_wrap_command(self._select_stage(path)))
+            train_xyz = path / "train.xyz"
+            need_select = maybe_regenerate(
+                path, "selected_configs.xyz", keep=None,
+                regenerate=lambda: None,
+                older_than=[train_xyz],
+            )
+            if need_select:
+                parts.append(_wrap_command(self._select_stage(path)))
         parts.append(_wrap_command(self._train_stage(path)))
         return "\n\n".join(parts)
 
