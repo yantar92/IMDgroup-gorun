@@ -76,35 +76,23 @@ from IMDgroup.gorun.core.incar import read_incar_toml, write_incar_toml
 # ---------------------------------------------------------------------------
 
 def _wrap_command(command: str) -> str:
-    """Wrap *command* in a heredoc if ``GORUN_WRAPPER`` is set.
+    """Wrap *command* in a heredoc passed to ``GORUN_WRAPPER``.
 
-    When ``GORUN_WRAPPER`` is non-empty::
+    ``${GORUN_WRAPPER:-bash}`` ensures the heredoc is always piped to
+    a shell: the configured wrapper when ``GORUN_WRAPPER`` is set, or
+    plain ``bash`` otherwise.  This avoids duplicating *command* in
+    an ``if/else`` branch.
 
-        if [ -n "${GORUN_WRAPPER:-}" ]; then
-          ${GORUN_WRAPPER} <<'EOF'
-        ${GORUN_INNER_SETUP:-}
-        <command>
-        EOF
-        else
-          <command>
-        fi
-
-    ``GORUN_WRAPPER`` must include the shell executable
-    (e.g. ``bash``, ``/usr/bin/bash``).  The heredoc is quoted
-    (``<<'EOF'``) so the outer bash does not expand
-    ``${GORUN_INNER_SETUP}`` before passing it through; the inner
-    shell expands it.  Both variables are expected to be exported by
-    the config's ``setup`` commands.
+    The heredoc is quoted (``<<'EOF'``) so the outer shell does not
+    expand ``${GORUN_INNER_SETUP}`` before passing it through; the
+    inner shell expands it.  Both variables are expected to be exported
+    by the config's ``setup`` commands.
     """
     return (
-        'if [ -n "${GORUN_WRAPPER:-}" ]; then\n'
-        "  ${GORUN_WRAPPER} <<'EOF'\n"
+        "${GORUN_WRAPPER:-bash} <<'EOF'\n"
         "${GORUN_INNER_SETUP:-}\n"
         f"{command}\n"
-        "EOF\n"
-        "else\n"
-        f"{command}\n"
-        "fi"
+        "EOF"
     )
 
 
