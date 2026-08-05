@@ -755,6 +755,7 @@ class MaceMultiheadFinetuneAdapter:
         weight_pt = args.pop("weight_pt", d["weight_pt"])
         weight_ft = args.pop("weight_ft", d["weight_ft"])
         device = args.pop("device", d["device"])
+        default_dtype = args.pop("default_dtype", d["default_dtype"])
 
         rest = _format_cli_args(args)
 
@@ -771,8 +772,9 @@ class MaceMultiheadFinetuneAdapter:
             "  --head_pt pt_head \\\n"
             "  --head_ft target_head \\\n"
             f"  --weight_pt {weight_pt} \\\n"
+            f"  --weight_ft {weight_ft} \\\n"
             f"  --device {device} \\\n"
-            f"  --weight_ft {weight_ft}"
+            f"  --default_dtype {default_dtype}"
             + (f" \\\n{rest}" if rest else "")
             + " >> log_db"
         )
