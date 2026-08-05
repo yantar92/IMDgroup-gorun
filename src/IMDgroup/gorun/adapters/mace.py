@@ -38,21 +38,32 @@ override the canned stages with a custom script.
 **MACE CLI passthrough**
 
 Only gorun-specific parameters (data sources, output naming, workflow
-control) are exposed as CLI flags and stored in ``INCAR.toml``.
-All other MACE training hyperparameters -- ``batch_size``, ``lr``,
-``device``, ``max_num_epochs``, ``swa``, ``ema``, etc. -- are
-forwarded directly to ``mace.cli.run_train`` and
-``mace.cli.fine_tuning_select`` via ``INCAR.toml``.  Add any key
-that MACE CLI accepts and gorun will pass it through as
-``--key value``.  For example::
+control) are exposed as CLI flags and stored at the top level of
+``INCAR.toml``.  All other MACE training hyperparameters --
+``batch_size``, ``lr``, ``device``, ``max_num_epochs``, ``swa``,
+``ema``, etc. -- are forwarded directly to ``mace.cli.run_train`` and
+``mace.cli.fine_tuning_select`` via ``INCAR.toml``.  Use TOML sections
+to route arguments to the correct stage::
 
     # INCAR.toml
     model_path = "/path/to/foundation.model"
     replay_xyz = "/path/to/replay.xyz"
     data_path = "structures.xyz"
-    batch_size = 12
     device = "cpu"
+
+    [fine_tuning_select]
+    num_samples = 50000
+    subselect = "fps"
+
+    [run_train]
+    batch_size = 12
+    lr = 0.0009
     swa = true
+    ema = true
+
+Keys at the top level that are not gorun-specific (unknown to the
+adapter) default to ``run_train``.  ``device`` and ``default_dtype``
+are shared — gorun passes them to both stages.
 """
 
 from __future__ import annotations
@@ -68,7 +79,10 @@ from sklearn.model_selection import train_test_split
 from termcolor import colored
 
 from IMDgroup.gorun.core.files import maybe_regenerate
-from IMDgroup.gorun.core.incar import read_incar_toml, write_incar_toml
+from IMDgroup.gorun.core.incar import (
+    read_incar_toml,
+    write_incar_toml_sections,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -248,6 +262,56 @@ class MaceMultiheadFinetuneAdapter:
     #: Parameters that must be non-empty for a valid run.
     REQUIRED: frozenset[str] = frozenset({"model_path", "replay_xyz"})
 
+    #: Keys that belong exclusively to ``fine_tuning_select``.
+    #: ``run_train`` does not accept these; putting them in
+    #: ``INCAR.toml`` routes them to ``_select_args`` only.
+    _SELECT_ONLY_KEYS: frozenset[str] = frozenset({
+        # Explicitly handled by _select_stage
+        'num_samples', 'subselect', 'filtering_type',
+        'weight_pt', 'weight_ft',
+        # Other fine_tuning_select flags users might set in INCAR.toml
+        'descriptors', 'disallow_random_padding',
+        'filter_atomic_numbers_pt',
+    })
+
+    #: Keys accepted by both ``fine_tuning_select`` and ``run_train``.
+    _SHARED_STAGE_KEYS: frozenset[str] = frozenset({
+        'device', 'default_dtype',
+    })
+
+    #: Gorun-specific keys that are not forwarded to either MACE CLI.
+    _TOP_LEVEL_KEYS: frozenset[str] = frozenset({
+        'model_path', 'replay_xyz',
+        'data_path', 'train_data_path', 'val_data_path', 'split_ratio',
+        'new_model_name', 'seed', 'e0s', 'no_fine_tuning_select',
+    })
+
+    #: TOML section name for ``fine_tuning_select`` arguments.
+    _SELECT_SECTION: str = 'fine_tuning_select'
+
+    #: TOML section name for ``run_train`` arguments.
+    _TRAIN_SECTION: str = 'run_train'
+
+    @classmethod
+    def _build_key_section(cls) -> dict[str, str | None]:
+        """Map every adapter-owned key to its TOML section.
+
+        Returns a dict mapping key → section name.  Keys in
+        ``_TOP_LEVEL_KEYS`` and ``_SHARED_STAGE_KEYS`` map to
+        ``None`` (top-level placement).  ``_SELECT_ONLY_KEYS``
+        map to ``_SELECT_SECTION``.  Everything else in
+        ``DEFAULTS`` maps to ``_TRAIN_SECTION``.
+        """
+        mapping: dict[str, str | None] = {}
+        for key in cls.DEFAULTS:
+            if key in cls._TOP_LEVEL_KEYS or key in cls._SHARED_STAGE_KEYS:
+                mapping[key] = None
+            elif key in cls._SELECT_ONLY_KEYS:
+                mapping[key] = cls._SELECT_SECTION
+            else:
+                mapping[key] = cls._TRAIN_SECTION
+        return mapping
+
     # pylint: disable=too-many-locals
     def __init__(
         self, *,
@@ -281,10 +345,22 @@ class MaceMultiheadFinetuneAdapter:
         # Workflow
         self.no_fine_tuning_select = no_fine_tuning_select
 
-        #: MACE CLI flags to forward to ``run_train`` and
-        #: ``fine_tuning_select`` as ``--key value``.  Populated from
-        #: extra ``**kwargs`` passed to the constructor.
-        self._passthrough_args: dict[str, object] = dict(kwargs)
+        #: Extra CLI flags forwarded to ``fine_tuning_select``
+        #: as ``--key value``.  Subset of *kwargs*: select-only
+        #: keys plus shared keys like ``device``.
+        self._select_args: dict[str, object] = {
+            k: v for k, v in kwargs.items()
+            if k in self._SELECT_ONLY_KEYS
+            or k in self._SHARED_STAGE_KEYS
+        }
+
+        #: Extra CLI flags forwarded to ``run_train`` as
+        #: ``--key value``.  Everything in *kwargs* except
+        #: select-only keys (unknown TOML keys land here).
+        self._train_args: dict[str, object] = {
+            k: v for k, v in kwargs.items()
+            if k not in self._SELECT_ONLY_KEYS
+        }
 
         #: Raw INCAR.toml content read at construction time, stored
         #: for later write-back in ``prepare_inputs``.  Empty when
@@ -300,9 +376,19 @@ class MaceMultiheadFinetuneAdapter:
     def from_cli_and_toml(cls, args) -> "MaceMultiheadFinetuneAdapter":
         """Build adapter from CLI args and INCAR.toml.
 
-        Merge order: adapter defaults -> INCAR.toml -> explicit CLI flags.
-        TOML keys unknown to the adapter are forwarded as passthrough
-        ``--key value`` flags to ``run_train``.
+        Merge order: adapter defaults -> INCAR.toml -> --incar -> explicit CLI flags.
+
+        INCAR.toml may use ``[fine_tuning_select]`` and
+        ``[run_train]`` sections.  Keys from those tables are
+        flattened into the adapter's flat parameter dict before
+        splitting into stage-specific args via ``_SELECT_ONLY_KEYS``.
+
+        The ``--incar`` flag accepts ``KEY:VAL`` pairs.  Dot notation
+        (``SECTION.KEY:VAL``) strips the section prefix; the bare key
+        is merged into the flat parameter dict.  Unknown TOML keys
+        are forwarded as passthrough ``--key value`` flags to
+        ``run_train`` (unless they match ``_SELECT_ONLY_KEYS``, in
+        which case they go to ``fine_tuning_select``).
 
         INCAR.toml is not written here; write-back is deferred to
         ``prepare_inputs`` so the file is not touched when the
@@ -314,15 +400,47 @@ class MaceMultiheadFinetuneAdapter:
         raw_toml = read_incar_toml()
         defaults = cls.DEFAULTS
 
-        # Build init kwargs: defaults < TOML < CLI
+        # --incar overrides: KEY:VAL or SECTION.KEY:VAL
+        incar_overrides: dict[str, object] = {}
+        if getattr(args, 'incar', None):
+            for item in args.incar:
+                if ':' not in item:
+                    print(colored(
+                        f"Invalid --incar value '{item}'.  "
+                        "Expected KEY:VAL format.",
+                        "red",
+                    ))
+                    sys.exit(1)
+                key_path, val_str = item.split(':', 1)
+                key = key_path.rsplit('.', 1)[-1] if '.' in key_path else key_path
+                incar_overrides[key] = val_str
+
+        # Flatten TOML sections into a flat overlay dict.
+        toml_overlay: dict[str, object] = {}
+        for key, val in raw_toml.items():
+            if isinstance(val, dict):
+                toml_overlay.update(val)
+            else:
+                toml_overlay[key] = val
+
+        # Build init kwargs: defaults < TOML < --incar < CLI
         init_kwargs: dict[str, object] = dict(defaults)
         for key in defaults:
-            if key in raw_toml:
-                init_kwargs[key] = raw_toml[key]
+            if key in toml_overlay:
+                init_kwargs[key] = toml_overlay[key]
+            if key in incar_overrides:
+                init_kwargs[key] = incar_overrides[key]
             if hasattr(args, key):
                 init_kwargs[key] = getattr(args, key)
 
-        for key, val in raw_toml.items():
+        # Unknown TOML keys
+        for key, val in toml_overlay.items():
+            if key in defaults:
+                continue
+            init_kwargs[key] = val
+
+        # Unknown --incar keys (after known keys, so they override TOML but not CLI)
+        for key, val in incar_overrides.items():
             if key in defaults:
                 continue
             init_kwargs[key] = val
@@ -337,13 +455,19 @@ class MaceMultiheadFinetuneAdapter:
 
         # Bootstrap: no INCAR.toml, no MACE CLI args, required params still empty.
         # Write a reference INCAR.toml and exit.
-        cli_mace_args = any(hasattr(args, key) for key in defaults)
+        cli_mace_args = (
+            any(hasattr(args, key) for key in defaults)
+            or bool(incar_overrides)
+        )
         if not raw_toml and not cli_mace_args:
             missing_required = [attr for attr in adapter.REQUIRED
                                 if not init_kwargs.get(attr)]
             if missing_required:
-                write_incar_toml(
-                    init_kwargs, raw_existing=None, defaults=defaults,
+                write_incar_toml_sections(
+                    init_kwargs,
+                    key_section=cls._build_key_section(),
+                    raw_existing=None,
+                    defaults=defaults,
                     always_include=adapter.REQUIRED,
                 )
                 print(colored(
@@ -454,8 +578,9 @@ class MaceMultiheadFinetuneAdapter:
         # in from_cli_and_toml) so that the file is not touched when
         # dispatch_run exits early due to gorun_ready or RUNNING.
         if self._merged_kwargs:
-            write_incar_toml(
+            write_incar_toml_sections(
                 self._merged_kwargs,
+                key_section=self._build_key_section(),
                 raw_existing=self._raw_toml,
                 defaults=self.DEFAULTS,
             )
@@ -618,10 +743,10 @@ class MaceMultiheadFinetuneAdapter:
     def _select_stage(self, path: Path) -> str:
         """Stage 1: ``fine_tuning_select``.
 
-        All parameters are pulled from ``_passthrough_args`` with
-        defaults from ``DEFAULTS``.
+        Only select-stage keys are forwarded from ``_select_args``.
+        Train-only flags never reach this stage.
         """
-        args = dict(self._passthrough_args)
+        args = dict(self._select_args)
         d = self.DEFAULTS
 
         num_samples = args.pop("num_samples", d["num_samples"])
@@ -655,12 +780,11 @@ class MaceMultiheadFinetuneAdapter:
     def _train_stage(self, path: Path) -> str:
         """Stage 2: ``run_train``.
 
-        All hyperparameters are pulled from ``_passthrough_args``
-        with defaults from ``DEFAULTS``.  SWA and EMA are handled as
-        boolean toggle groups (sub-args only emitted when the toggle
-        is on).
+        Only train-stage keys are forwarded from ``_train_args``.
+        SWA and EMA are handled as boolean toggle groups (sub-args
+        only emitted when the toggle is on).
         """
-        args = dict(self._passthrough_args)
+        args = dict(self._train_args)
         heads_path = path / "heads.json"
 
         # --- Pop known training parameters with defaults ---
@@ -707,7 +831,7 @@ class MaceMultiheadFinetuneAdapter:
             "python -u -m mace.cli.run_train \\\n"
             f"  --name {self.new_model_name} \\\n"
             "  --multiheads_finetuning True \\\n"
-            f"  --heads $(cat {heads_path}) \\\n"
+            f'  --heads "$(cat {heads_path})" \\\n'
             f"  --valid_fraction {valid_fraction} \\\n"
             f"  --foundation_model {self.model_path} \\\n"
             f"  --energy_weight {energy_weight} \\\n"

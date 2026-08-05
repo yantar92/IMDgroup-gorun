@@ -26,8 +26,11 @@
 
 Analogous to VASP's INCAR file.  Each adapter can read parameter
 defaults from ``INCAR.toml`` in the working directory.  The file uses
-flat TOML; keys typically match CLI argument names with hyphens
-replaced by underscores.
+TOML; keys typically match CLI argument names with hyphens replaced
+by underscores.
+
+Adapters may use flat key-value pairs or group parameters into
+``[section]`` tables (see :func:`write_incar_toml_sections`).
 
 This module is adapter-agnostic -- it only reads and writes the file.
 Parameter defaults, validation, and the mapping from TOML keys to
@@ -54,6 +57,22 @@ def read_incar_toml() -> dict[str, object]:
         return {}
     with open(_INCAR_PATH, "rb") as fh:
         return tomllib.load(fh)
+
+
+def _flatten_toml(raw: dict[str, object]) -> dict[str, object]:
+    """Flatten a possibly-nested TOML dict.
+
+    Values that are themselves dicts (TOML ``[section]`` tables)
+    have their keys merged into the top level.  Non-dict values
+    are passed through unchanged.  Section names are discarded.
+    """
+    result: dict[str, object] = {}
+    for key, val in raw.items():
+        if isinstance(val, dict):
+            result.update(val)
+        else:
+            result[key] = val
+    return result
 
 
 def _toml_format_value(value: object) -> str:
@@ -155,6 +174,110 @@ def write_incar_toml(
     lines = [f"{key} = {_toml_format_value(val)}" for key, val in merged.items()]
     with open(_INCAR_PATH, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines) + "\n")
+
+    label = "Bootstrapped" if is_bootstrap else "Updated"
+    print(colored(f"{label} INCAR.toml", "green"))
+
+
+def write_incar_toml_sections(
+    values: dict[str, object],
+    *,
+    key_section: dict[str, str | None],
+    raw_existing: dict[str, object] | None = None,
+    defaults: dict[str, object] | None = None,
+    always_include: set[str] | None = None,
+) -> None:
+    """Write ``INCAR.toml`` with ``[section]`` grouping.
+
+    Like :func:`write_incar_toml` but *values* are grouped into TOML
+    ``[section]`` tables based on *key_section*, which maps each
+    adapter key to its section name (or ``None`` for top-level).
+
+    *raw_existing* may contain nested dicts from a prior
+    ``tomllib.load``; they are flattened for comparison.  Keys not
+    in *key_section* are written at the top level.
+
+    Parameters
+    ----------
+    values:
+        Flat dict of merged parameter values (CLI ∪ TOML ∪ defaults).
+    key_section:
+        Mapping from adapter key to TOML section name or ``None``
+        for top-level placement.
+    raw_existing:
+        The previously-read ``INCAR.toml`` content (may be nested).
+    defaults:
+        Hardcoded adapter defaults (flat).  Only non-default values
+        are written in update mode.
+    always_include:
+        Keys written even when matching defaults or empty.
+    """
+    if raw_existing is None:
+        raw_existing = {}
+
+    flat_raw = _flatten_toml(raw_existing)
+
+    is_bootstrap = not _INCAR_PATH.is_file()
+
+    # Build the flattened merged dict (same logic as write_incar_toml).
+    merged: dict[str, object] = {}
+
+    # Preserve user-owned keys from the existing file.
+    for key, val in flat_raw.items():
+        if defaults is None or key not in defaults:
+            merged[key] = val
+
+    # Add adapter keys.
+    for key, val in values.items():
+        if key in (always_include or set()):
+            merged[key] = val
+        elif is_bootstrap:
+            if val is None:
+                continue
+            merged[key] = val
+        elif defaults is not None and key in defaults:
+            if val == defaults[key] and key not in flat_raw:
+                continue
+            merged[key] = val
+        else:
+            merged[key] = val
+
+    # For non-bootstrap, compare against the existing file content.
+    if not is_bootstrap:
+        if merged == flat_raw:
+            return  # nothing changed
+
+    # --- Group by section ---
+    sections: dict[str, dict[str, object]] = {}
+    top_level: dict[str, object] = {}
+
+    for key, val in merged.items():
+        section = key_section.get(key)
+        if section:
+            sections.setdefault(section, {})[key] = val
+        else:
+            top_level[key] = val
+
+    # --- Write ---
+    if _INCAR_PATH.is_file():
+        backup = Path("INCAR.toml.old")
+        if backup.is_file():
+            backup.unlink()
+        shutil.copy2(_INCAR_PATH, backup)
+        print(colored("Backed up INCAR.toml → INCAR.toml.old", "yellow"))
+
+    block: list[str] = []
+    for key, val in top_level.items():
+        block.append(f"{key} = {_toml_format_value(val)}")
+    for section_name in sorted(sections):
+        if block:
+            block.append("")
+        block.append(f"[{section_name}]")
+        for key in sorted(sections[section_name]):
+            block.append(f"{key} = {_toml_format_value(sections[section_name][key])}")
+
+    with open(_INCAR_PATH, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(block) + "\n")
 
     label = "Bootstrapped" if is_bootstrap else "Updated"
     print(colored(f"{label} INCAR.toml", "green"))

@@ -179,8 +179,13 @@ def _build_parser() -> argparse.ArgumentParser:
         epilog=(
             "MACE training hyperparameters:\n"
             "  Set batch_size, lr, device, swa, ema, max_num_epochs, and any\n"
-            "  other mace.cli.run_train flag in INCAR.toml.  They are forwarded\n"
-            "  directly as --key value.\n"
+            "  other mace.cli.run_train flag in INCAR.toml under [run_train]\n"
+            "  or [fine_tuning_select].  Override via --incar:\n"
+            "\n"
+            "    --incar run_train.lr:0.001 fine_tuning_select.num_samples:50000\n"
+            "\n"
+            "  Dot notation routes to the matching TOML section.\n"
+            "  Bare keys (no dot) default to run_train.\n"
             "\n"
             "Escape hatch:\n"
             "  Place RUNFILE.sh or RUNFILE.py in the working directory to\n"
@@ -239,6 +244,15 @@ def _build_parser() -> argparse.ArgumentParser:
         "--no-fine-tuning-select", action="store_true",
         default=argparse.SUPPRESS,
         help="Skip the fine_tuning_select stage.",
+    )
+    mace_parser.add_argument(
+        "--incar", nargs="+", default=None,
+        metavar="KEY:VAL",
+        help="Override INCAR.toml parameters.  "
+        "Use SECTION.KEY:VAL to target a section "
+        "(e.g. --incar run_train.lr:0.001 "
+        "fine_tuning_select.num_samples:50000).  "
+        "Bare keys default to run_train.",
     )
 
     ## maps
@@ -377,8 +391,8 @@ def _make_mace_adapter(args: argparse.Namespace) -> MaceMultiheadFinetuneAdapter
     """Build a MaceMultiheadFinetuneAdapter from CLI args and INCAR.toml.
 
     Delegates to ``MaceMultiheadFinetuneAdapter.from_cli_and_toml`` which
-    handles INCAR.toml reading, merging (defaults < TOML < CLI), bootstrap,
-    and write-back.
+    handles INCAR.toml reading, merging (defaults < TOML < --incar < CLI),
+    bootstrap, and write-back.
     """
     return MaceMultiheadFinetuneAdapter.from_cli_and_toml(args)
 
