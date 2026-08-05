@@ -203,9 +203,9 @@ class MaceMultiheadFinetuneAdapter:
         # Data sources
         "model_path": "",
         "replay_xyz": "",
-        "data_path": None,
-        "train_data_path": None,
-        "val_data_path": None,
+        "data_path": "",
+        "train_data_path": "",
+        "val_data_path": "",
         "split_ratio": 0.20,
         # Output
         "new_model_name": "finetuned_model.model",
@@ -254,9 +254,9 @@ class MaceMultiheadFinetuneAdapter:
         # Data sources
         model_path: str,
         replay_xyz: str,
-        data_path: str | None = None,
-        train_data_path: str | None = None,
-        val_data_path: str | None = None,
+        data_path: str = "",
+        train_data_path: str = "",
+        val_data_path: str = "",
         split_ratio: float = 0.20,
         # Output
         new_model_name: str = "finetuned_model.model",
@@ -378,7 +378,7 @@ class MaceMultiheadFinetuneAdapter:
                 + ", ".join(missing)
                 + ".  Provide them via CLI or INCAR.toml."
             )
-        if self.data_path is None and self.train_data_path is None:
+        if not self.data_path and not self.train_data_path:
             print(
                 colored(
                     "No data source specified.  Provide --data-path or "
@@ -414,7 +414,7 @@ class MaceMultiheadFinetuneAdapter:
         """Return True when at least one data source file exists."""
         sources = [
             p for p in (self.data_path, self.train_data_path, self.val_data_path)
-            if p is not None
+            if p
         ]
         return any(Path(p).is_file() for p in sources)
 
@@ -481,15 +481,15 @@ class MaceMultiheadFinetuneAdapter:
     def _get_train_val_source_paths(self) -> list[Path]:
         """Return paths of source files used to generate train/val."""
         paths: list[Path] = []
-        if self.data_path is not None:
+        if self.data_path:
             p = Path(self.data_path)
             if p.is_file():
                 paths.append(p)
-        if self.train_data_path is not None:
+        if self.train_data_path:
             p = Path(self.train_data_path)
             if p.is_file():
                 paths.append(p)
-        if self.val_data_path is not None:
+        if self.val_data_path:
             p = Path(self.val_data_path)
             if p.is_file():
                 paths.append(p)
@@ -499,10 +499,10 @@ class MaceMultiheadFinetuneAdapter:
         """Read structures from data source(s), strip constraints,
         split if needed, and write ``train.xyz`` and ``val.xyz``.
         """
-        if self.train_data_path is not None and self.val_data_path is not None:
+        if self.train_data_path and self.val_data_path:
             train = self._read_and_clean(self.train_data_path)
             val = self._read_and_clean(self.val_data_path)
-        elif self.data_path is not None:
+        elif self.data_path:
             structures = self._read_and_clean(self.data_path)
             train, val = train_test_split(
                 structures, test_size=self.split_ratio,
