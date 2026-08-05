@@ -183,7 +183,7 @@ module use /appl/local/laifs/modules
 module load lumi-aif-singularity-bindings
 
 export GORUN_WRAPPER='srun --ntasks=1 --cpu-bind=cores singularity run /appl/local/laifs/containers/lumi-multitorch-u24r70f21m50t210-20260415_130625/lumi-multitorch-torch-u24r70f21m50t210-20260415_130625.sif bash'
-export GORUN_INNER_SETUP='source /projappl/project_465002777/usuga/mace/mace_env/bin/activate'
+export GORUN_INNER_SETUP='source $SCRATCH/mace-venv/bin/activate'
 
 # PyTorch / CUDA tuning
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK}"
