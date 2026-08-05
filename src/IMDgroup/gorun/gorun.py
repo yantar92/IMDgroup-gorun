@@ -72,10 +72,7 @@ def _is_subcommand(name: str) -> bool:
     return name in _SUBCOMMANDS
 
 
-# ---------------------------------------------------------------------------
 # Argument parsing
-# ---------------------------------------------------------------------------
-
 
 def _build_parser() -> argparse.ArgumentParser:
     """Build the top-level argument parser with subcommands.
@@ -332,10 +329,6 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     if argv is None:
         argv = sys.argv[1:]
 
-    # Normalize backward-compatible subcommand names.
-    if argv and argv[0] == "mace":
-        argv = ["mace-finetune"] + argv[1:]
-
     # If the first argument is a known subcommand, parse normally.
     if argv and _is_subcommand(argv[0]):
         return _build_parser().parse_args(argv)
@@ -390,11 +383,42 @@ def _make_vasp_adapter(args: argparse.Namespace) -> VaspAdapter:
 def _make_mace_adapter(args: argparse.Namespace) -> MaceMultiheadFinetuneAdapter:
     """Build a MaceMultiheadFinetuneAdapter from CLI args and INCAR.toml.
 
-    Delegates to ``MaceMultiheadFinetuneAdapter.from_cli_and_toml`` which
-    handles INCAR.toml reading, merging (defaults < TOML < --incar < CLI),
-    bootstrap, and write-back.
+    Parses ``--incar`` into a structured dict mapping section name
+    (or ``None`` for auto-routing) to ``{key: val_str}``.  The
+    adapter constructor reads INCAR.toml internally and handles
+    merge, bootstrap, and write-back.
     """
-    return MaceMultiheadFinetuneAdapter.from_cli_and_toml(args)
+    # Parse --incar overrides: SECTION.KEY:VAL or KEY:VAL
+    incar_overrides: dict[str | None, dict[str, str]] = {}
+    if args.incar:
+        for item in args.incar:
+            if ':' not in item:
+                print(colored(
+                    f"Invalid --incar value '{item}'.  "
+                    "Expected KEY:VAL format.",
+                    "red",
+                ))
+                sys.exit(1)
+            key_path, val_str = item.split(':', 1)
+            if '.' in key_path:
+                section, key = key_path.rsplit('.', 1)
+            else:
+                section, key = None, key_path
+            incar_overrides.setdefault(section, {})[key] = val_str
+
+    return MaceMultiheadFinetuneAdapter(
+        model_path=getattr(args, 'model_path', None),
+        replay_xyz=getattr(args, 'replay_xyz', None),
+        data_path=getattr(args, 'data_path', None),
+        train_data_path=getattr(args, 'train_data_path', None),
+        val_data_path=getattr(args, 'val_data_path', None),
+        split_ratio=getattr(args, 'split_ratio', None),
+        new_model_name=getattr(args, 'new_model_name', None),
+        seed=getattr(args, 'seed', None),
+        e0s=getattr(args, 'e0s', None),
+        no_fine_tuning_select=getattr(args, 'no_fine_tuning_select', None),
+        incar_overrides=incar_overrides,
+    )
 
 
 def _make_maps_adapter(args: argparse.Namespace) -> MapsAdapter:

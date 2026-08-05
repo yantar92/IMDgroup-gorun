@@ -211,264 +211,263 @@ class MaceMultiheadFinetuneAdapter:
     name = "mace"
 
     #: Hardcoded defaults for all parameters.
-    #: Used for INCAR.toml bootstrapping, sparse write-back, and as
-    #: the fallback when a passthrough key is absent from INCAR.toml.
+    #: Top-level scalar keys are gorun-specific or shared between
+    #: stages.  Dict-valued keys represent TOML ``[section]`` tables:
+    #: their sub-keys are forwarded directly to the corresponding
+    #: MACE CLI stage.
     DEFAULTS: dict[str, object] = {
-        # Data sources
+        # Top-level — gorun-specific (data sources, output, workflow)
         "model_path": "",
         "replay_xyz": "",
         "data_path": "",
         "train_data_path": "",
         "val_data_path": "",
         "split_ratio": 0.20,
-        # Output
         "new_model_name": "finetuned_model.model",
         "seed": 1,
         "e0s": "",
-        # Workflow
         "no_fine_tuning_select": False,
-        # fine_tuning_select
-        "num_samples": 30000,
-        "subselect": "fps",
-        "filtering_type": "exclusive",
-        "weight_pt": 1.0,
-        "weight_ft": 10.0,
-        # run_train — core
-        "valid_fraction": 0.05,
-        "energy_weight": 1.0,
-        "forces_weight": 10.0,
-        "stress_weight": 10.0,
-        "lr": 0.0009,
-        "weight_decay": 5e-9,
+        # Top-level — shared between both stages
         "device": "cuda",
         "default_dtype": "float64",
-        "max_num_epochs": 100,
-        "batch_size": 6,
-        "compute_stress": True,
-        "loss": "stress",
-        "force_mh_ft_lr": True,
-        # run_train — SWA
-        "swa": True,
-        "swa_lr": 0.0001,
-        "start_swa": 40,
-        "swa_energy_weight": 10.0,
-        "swa_forces_weight": 10.0,
-        "swa_stress_weight": 10.0,
-        # run_train — EMA
-        "ema": True,
-        "ema_decay": 0.99999,
+        # [fine_tuning_select]
+        "fine_tuning_select": {
+            "num_samples": 30000,
+            "subselect": "fps",
+            "filtering_type": "exclusive",
+            "weight_pt": 1.0,
+            "weight_ft": 10.0,
+            # Other MACE CLI flags users may set
+            "descriptors": "",
+            "disallow_random_padding": False,
+            "filter_atomic_numbers_pt": "",
+        },
+        # [run_train]
+        "run_train": {
+            "valid_fraction": 0.05,
+            "energy_weight": 1.0,
+            "forces_weight": 10.0,
+            "stress_weight": 10.0,
+            "lr": 0.0009,
+            "weight_decay": 5e-9,
+            "max_num_epochs": 100,
+            "batch_size": 6,
+            "compute_stress": True,
+            "loss": "stress",
+            "force_mh_ft_lr": True,
+            # SWA
+            "swa": True,
+            "swa_lr": 0.0001,
+            "start_swa": 40,
+            "swa_energy_weight": 10.0,
+            "swa_forces_weight": 10.0,
+            "swa_stress_weight": 10.0,
+            # EMA
+            "ema": True,
+            "ema_decay": 0.99999,
+        },
     }
 
     #: Parameters that must be non-empty for a valid run.
     REQUIRED: frozenset[str] = frozenset({"model_path", "replay_xyz"})
 
-    #: Keys that belong exclusively to ``fine_tuning_select``.
-    #: ``run_train`` does not accept these; putting them in
-    #: ``INCAR.toml`` routes them to ``_select_args`` only.
-    _SELECT_ONLY_KEYS: frozenset[str] = frozenset({
-        # Explicitly handled by _select_stage
-        'num_samples', 'subselect', 'filtering_type',
-        'weight_pt', 'weight_ft',
-        # Other fine_tuning_select flags users might set in INCAR.toml
-        'descriptors', 'disallow_random_padding',
-        'filter_atomic_numbers_pt',
-    })
-
-    #: Keys accepted by both ``fine_tuning_select`` and ``run_train``.
-    _SHARED_STAGE_KEYS: frozenset[str] = frozenset({
-        'device', 'default_dtype',
-    })
-
-    #: Gorun-specific keys that are not forwarded to either MACE CLI.
-    _TOP_LEVEL_KEYS: frozenset[str] = frozenset({
-        'model_path', 'replay_xyz',
-        'data_path', 'train_data_path', 'val_data_path', 'split_ratio',
-        'new_model_name', 'seed', 'e0s', 'no_fine_tuning_select',
-    })
-
-    #: TOML section name for ``fine_tuning_select`` arguments.
-    _SELECT_SECTION: str = 'fine_tuning_select'
-
-    #: TOML section name for ``run_train`` arguments.
-    _TRAIN_SECTION: str = 'run_train'
-
     @classmethod
     def _build_key_section(cls) -> dict[str, str | None]:
         """Map every adapter-owned key to its TOML section.
 
-        Returns a dict mapping key → section name.  Keys in
-        ``_TOP_LEVEL_KEYS`` and ``_SHARED_STAGE_KEYS`` map to
-        ``None`` (top-level placement).  ``_SELECT_ONLY_KEYS``
-        map to ``_SELECT_SECTION``.  Everything else in
-        ``DEFAULTS`` maps to ``_TRAIN_SECTION``.
+        Returns a dict mapping key → section name.  Dict-valued
+        keys in ``DEFAULTS`` are section tables; their sub-keys
+        map to that section name.  Scalar-valued keys map to
+        ``None`` (top-level placement).
+
+        The structure of ``DEFAULTS`` is the single source of truth
+        for section membership.
         """
         mapping: dict[str, str | None] = {}
-        for key in cls.DEFAULTS:
-            if key in cls._TOP_LEVEL_KEYS or key in cls._SHARED_STAGE_KEYS:
-                mapping[key] = None
-            elif key in cls._SELECT_ONLY_KEYS:
-                mapping[key] = cls._SELECT_SECTION
+        for key, val in cls.DEFAULTS.items():
+            if isinstance(val, dict):
+                for sub_key in val:
+                    mapping[sub_key] = key
             else:
-                mapping[key] = cls._TRAIN_SECTION
+                mapping[key] = None
         return mapping
 
-    # pylint: disable=too-many-locals
+    # pylint: disable=too-many-locals,too-many-branches
     def __init__(
         self, *,
         # Data sources
-        model_path: str,
-        replay_xyz: str,
-        data_path: str = "",
-        train_data_path: str = "",
-        val_data_path: str = "",
-        split_ratio: float = 0.20,
+        model_path: str | None = None,
+        replay_xyz: str | None = None,
+        data_path: str | None = None,
+        train_data_path: str | None = None,
+        val_data_path: str | None = None,
+        split_ratio: float | None = None,
         # Output
-        new_model_name: str = "finetuned_model.model",
-        seed: int = 1,
-        e0s: str = "",
+        new_model_name: str | None = None,
+        seed: int | None = None,
+        e0s: str | None = None,
         # Workflow
-        no_fine_tuning_select: bool = False,
-        # Passthrough
-        **kwargs: object,
+        no_fine_tuning_select: bool | None = None,
+        # INCAR.toml overrides
+        incar_overrides: dict[str | None, dict[str, str]] | None = None,
     ) -> None:
-        # Data
-        self.model_path = model_path
-        self.replay_xyz = replay_xyz
-        self.data_path = data_path
-        self.train_data_path = train_data_path
-        self.val_data_path = val_data_path
-        self.split_ratio = split_ratio
-        # Output
-        self.new_model_name = new_model_name
-        self.seed = seed
-        self.e0s = e0s
-        # Workflow
-        self.no_fine_tuning_select = no_fine_tuning_select
+        """Build adapter from explicit kwargs, INCAR.toml, and --incar overrides.
 
-        #: Extra CLI flags forwarded to ``fine_tuning_select``
-        #: as ``--key value``.  Subset of *kwargs*: select-only
-        #: keys plus shared keys like ``device``.
-        self._select_args: dict[str, object] = {
-            k: v for k, v in kwargs.items()
-            if k in self._SELECT_ONLY_KEYS
-            or k in self._SHARED_STAGE_KEYS
-        }
+        Merge order (lower to higher priority):
+        adapter DEFAULTS < INCAR.toml < --incar overrides < explicit CLI kwargs.
 
-        #: Extra CLI flags forwarded to ``run_train`` as
-        #: ``--key value``.  Everything in *kwargs* except
-        #: select-only keys (unknown TOML keys land here).
-        self._train_args: dict[str, object] = {
-            k: v for k, v in kwargs.items()
-            if k not in self._SELECT_ONLY_KEYS
-        }
+        INCAR.toml is read from the working directory.  The merge
+        is structural: ``[fine_tuning_select]`` and ``[run_train]``
+        tables from INCAR.toml are merged into the corresponding
+        section dicts in DEFAULTS.  Unknown top-level scalars in
+        INCAR.toml default to ``run_train`` (backward compatibility
+        with INCAR.toml files that predate section grouping).
 
-        #: Raw INCAR.toml content read at construction time, stored
-        #: for later write-back in ``prepare_inputs``.  Empty when
-        #: the adapter is constructed directly (not via
-        #: ``from_cli_and_toml``).
-        self._raw_toml: dict[str, object] = {}
-        #: Merged parameter values (defaults < TOML < CLI), stored
-        #: for later write-back in ``prepare_inputs``.
-        self._merged_kwargs: dict[str, object] = {}
+        *incar_overrides* maps section name (or ``None`` for
+        auto-routing) to ``{key: val_str}``.  Auto-routed keys
+        (``None`` section) are placed based on DEFAULTS structure:
+        keys known in a section go there; everything else defaults
+        to ``run_train``.  Values are strings from the CLI.
 
-    # Construction from CLI + INCAR.toml
-    @classmethod
-    def from_cli_and_toml(cls, args) -> "MaceMultiheadFinetuneAdapter":
-        """Build adapter from CLI args and INCAR.toml.
-
-        Merge order: adapter defaults -> INCAR.toml -> --incar -> explicit CLI flags.
-
-        INCAR.toml may use ``[fine_tuning_select]`` and
-        ``[run_train]`` sections.  Keys from those tables are
-        flattened into the adapter's flat parameter dict before
-        splitting into stage-specific args via ``_SELECT_ONLY_KEYS``.
-
-        The ``--incar`` flag accepts ``KEY:VAL`` pairs.  Dot notation
-        (``SECTION.KEY:VAL``) strips the section prefix; the bare key
-        is merged into the flat parameter dict.  Unknown TOML keys
-        are forwarded as passthrough ``--key value`` flags to
-        ``run_train`` (unless they match ``_SELECT_ONLY_KEYS``, in
-        which case they go to ``fine_tuning_select``).
-
-        INCAR.toml is not written here; write-back is deferred to
-        ``prepare_inputs`` so the file is not touched when the
-        pipeline exits early (e.g. ``gorun_ready`` already present).
-
-        When ``INCAR.toml`` does not exist and required parameters are
-        missing, a reference file is written and the program exits.
+        When INCAR.toml does not exist and no CLI args provide the
+        required parameters, a reference INCAR.toml is written and
+        the process exits.
         """
         raw_toml = read_incar_toml()
-        defaults = cls.DEFAULTS
+        if incar_overrides is None:
+            incar_overrides = {}
 
-        # --incar overrides: KEY:VAL or SECTION.KEY:VAL
-        incar_overrides: dict[str, object] = {}
-        if getattr(args, 'incar', None):
-            for item in args.incar:
-                if ':' not in item:
-                    print(colored(
-                        f"Invalid --incar value '{item}'.  "
-                        "Expected KEY:VAL format.",
-                        "red",
-                    ))
-                    sys.exit(1)
-                key_path, val_str = item.split(':', 1)
-                key = key_path.rsplit('.', 1)[-1] if '.' in key_path else key_path
-                incar_overrides[key] = val_str
+        # --- Extract section defaults from DEFAULTS ---
+        select_defaults: dict[str, object] = dict(
+            self.DEFAULTS.get("fine_tuning_select", {}))
+        train_defaults: dict[str, object] = dict(
+            self.DEFAULTS.get("run_train", {}))
 
-        # Flatten TOML sections into a flat overlay dict.
-        toml_overlay: dict[str, object] = {}
+        # Build sets of known keys for auto-routing.
+        known_select_keys: set[str] = set(select_defaults.keys())
+        known_top_keys: set[str] = {
+            k for k, v in self.DEFAULTS.items()
+            if not isinstance(v, dict)
+        }
+
+        # --- Merge sections: DEFAULTS < TOML section < incar_overrides section ---
+        merged_select: dict[str, object] = dict(select_defaults)
+        merged_train: dict[str, object] = dict(train_defaults)
+
         for key, val in raw_toml.items():
             if isinstance(val, dict):
-                toml_overlay.update(val)
+                if key == "fine_tuning_select":
+                    merged_select.update(val)
+                elif key == "run_train":
+                    merged_train.update(val)
+
+        section_overrides = incar_overrides.get("fine_tuning_select", {})
+        if section_overrides:
+            merged_select.update(section_overrides)
+        section_overrides = incar_overrides.get("run_train", {})
+        if section_overrides:
+            merged_train.update(section_overrides)
+
+        # --- Merge top-level: DEFAULTS < TOML scalars < auto-routed incar ---
+        merged_top: dict[str, object] = {
+            k: v for k, v in self.DEFAULTS.items()
+            if not isinstance(v, dict)
+        }
+
+        for key, val in raw_toml.items():
+            if not isinstance(val, dict):
+                if key in known_top_keys:
+                    merged_top[key] = val
+                elif key in known_select_keys:
+                    merged_select[key] = val
+                else:
+                    # Unknown top-level keys default to run_train.
+                    merged_train[key] = val
+
+        auto_overrides = incar_overrides.get(None, {})
+        for key, val in auto_overrides.items():
+            if key in known_select_keys:
+                merged_select[key] = val
+            elif key in known_top_keys:
+                merged_top[key] = val
             else:
-                toml_overlay[key] = val
+                merged_train[key] = val
 
-        # Build init kwargs: defaults < TOML < --incar < CLI
-        init_kwargs: dict[str, object] = dict(defaults)
-        for key in defaults:
-            if key in toml_overlay:
-                init_kwargs[key] = toml_overlay[key]
-            if key in incar_overrides:
-                init_kwargs[key] = incar_overrides[key]
-            if hasattr(args, key):
-                init_kwargs[key] = getattr(args, key)
+        # --- CLI kwargs override top-level ---
+        cli_kwargs: dict[str, object] = {}
+        if model_path is not None:
+            cli_kwargs["model_path"] = model_path
+        if replay_xyz is not None:
+            cli_kwargs["replay_xyz"] = replay_xyz
+        if data_path is not None:
+            cli_kwargs["data_path"] = data_path
+        if train_data_path is not None:
+            cli_kwargs["train_data_path"] = train_data_path
+        if val_data_path is not None:
+            cli_kwargs["val_data_path"] = val_data_path
+        if split_ratio is not None:
+            cli_kwargs["split_ratio"] = split_ratio
+        if new_model_name is not None:
+            cli_kwargs["new_model_name"] = new_model_name
+        if seed is not None:
+            cli_kwargs["seed"] = seed
+        if e0s is not None:
+            cli_kwargs["e0s"] = e0s
+        if no_fine_tuning_select is not None:
+            cli_kwargs["no_fine_tuning_select"] = no_fine_tuning_select
+        merged_top.update(cli_kwargs)
 
-        # Unknown TOML keys
-        for key, val in toml_overlay.items():
-            if key in defaults:
-                continue
-            init_kwargs[key] = val
+        # --- Copy shared keys into both stage dicts ---
+        for shared_key in ("device", "default_dtype"):
+            if shared_key not in merged_select:
+                merged_select[shared_key] = merged_top[shared_key]
+            if shared_key not in merged_train:
+                merged_train[shared_key] = merged_top[shared_key]
 
-        # Unknown --incar keys (after known keys, so they override TOML but not CLI)
-        for key, val in incar_overrides.items():
-            if key in defaults:
-                continue
-            init_kwargs[key] = val
+        # --- Populate instance attributes from merged top-level ---
+        self.model_path: str = merged_top.get("model_path", "")
+        self.replay_xyz: str = merged_top.get("replay_xyz", "")
+        self.data_path: str = merged_top.get("data_path", "")
+        self.train_data_path: str = merged_top.get("train_data_path", "")
+        self.val_data_path: str = merged_top.get("val_data_path", "")
+        self.split_ratio: float = merged_top.get("split_ratio", 0.20)
+        self.new_model_name: str = merged_top.get(
+            "new_model_name", "finetuned_model.model")
+        self.seed: int = merged_top.get("seed", 1)
+        self.e0s: str = merged_top.get("e0s", "")
+        self.no_fine_tuning_select: bool = merged_top.get(
+            "no_fine_tuning_select", False)
 
-        adapter = cls(**init_kwargs)
+        #: Extra CLI flags forwarded to ``fine_tuning_select``.
+        self._select_args: dict[str, object] = merged_select
 
-        # Store for later write-back in prepare_inputs, so that
-        # INCAR.toml is not touched when gorun_ready is present and
-        # the pipeline exits early.
-        adapter._raw_toml = raw_toml
-        adapter._merged_kwargs = init_kwargs
+        #: Extra CLI flags forwarded to ``run_train``.
+        self._train_args: dict[str, object] = merged_train
 
-        # Bootstrap: no INCAR.toml, no MACE CLI args, required params still empty.
-        # Write a reference INCAR.toml and exit.
-        cli_mace_args = (
-            any(hasattr(args, key) for key in defaults)
-            or bool(incar_overrides)
-        )
-        if not raw_toml and not cli_mace_args:
-            missing_required = [attr for attr in adapter.REQUIRED
-                                if not init_kwargs.get(attr)]
+        #: Raw INCAR.toml content, stored for write-back in
+        #: ``prepare_inputs``.
+        self._raw_toml: dict[str, object] = raw_toml
+
+        #: Flat merged parameter dict for INCAR.toml write-back.
+        self._merged_kwargs: dict[str, object] = {}
+        self._merged_kwargs.update(merged_top)
+        self._merged_kwargs.update(merged_select)
+        self._merged_kwargs.update(merged_train)
+
+        # --- Bootstrap ---
+        has_cli_input = bool(cli_kwargs) or bool(incar_overrides)
+        if not raw_toml and not has_cli_input:
+            missing_required = [
+                attr for attr in self.REQUIRED
+                if not self._merged_kwargs.get(attr)
+            ]
             if missing_required:
                 write_incar_toml_sections(
-                    init_kwargs,
-                    key_section=cls._build_key_section(),
+                    self._merged_kwargs,
+                    key_section=self._build_key_section(),
                     raw_existing=None,
-                    defaults=defaults,
-                    always_include=adapter.REQUIRED,
+                    defaults=self.DEFAULTS,
+                    always_include=self.REQUIRED,
                 )
                 print(colored(
                     "Edit INCAR.toml to set the required parameters: "
@@ -477,9 +476,7 @@ class MaceMultiheadFinetuneAdapter:
                 ))
                 sys.exit(0)
 
-        adapter.validate()
-
-        return adapter
+        self.validate()
 
     # ------------------------------------------------------------------
     # Validation
@@ -575,7 +572,7 @@ class MaceMultiheadFinetuneAdapter:
             keep = set()
 
         # Write back merged INCAR.toml.  Deferred here (rather than
-        # in from_cli_and_toml) so that the file is not touched when
+        # in the constructor) so that the file is not touched when
         # dispatch_run exits early due to gorun_ready or RUNNING.
         if self._merged_kwargs:
             write_incar_toml_sections(
@@ -747,15 +744,15 @@ class MaceMultiheadFinetuneAdapter:
         Train-only flags never reach this stage.
         """
         args = dict(self._select_args)
-        d = self.DEFAULTS
+        sd = self.DEFAULTS["fine_tuning_select"]
 
-        num_samples = args.pop("num_samples", d["num_samples"])
-        subselect = args.pop("subselect", d["subselect"])
-        filtering_type = args.pop("filtering_type", d["filtering_type"])
-        weight_pt = args.pop("weight_pt", d["weight_pt"])
-        weight_ft = args.pop("weight_ft", d["weight_ft"])
-        device = args.pop("device", d["device"])
-        default_dtype = args.pop("default_dtype", d["default_dtype"])
+        num_samples = args.pop("num_samples", sd["num_samples"])
+        subselect = args.pop("subselect", sd["subselect"])
+        filtering_type = args.pop("filtering_type", sd["filtering_type"])
+        weight_pt = args.pop("weight_pt", sd["weight_pt"])
+        weight_ft = args.pop("weight_ft", sd["weight_ft"])
+        device = args.pop("device", self.DEFAULTS["device"])
+        default_dtype = args.pop("default_dtype", self.DEFAULTS["default_dtype"])
 
         rest = _format_cli_args(args)
 
@@ -790,39 +787,39 @@ class MaceMultiheadFinetuneAdapter:
         heads_path = path / "heads.json"
 
         # --- Pop known training parameters with defaults ---
-        d = self.DEFAULTS
-        valid_fraction = args.pop("valid_fraction", d["valid_fraction"])
-        energy_weight = args.pop("energy_weight", d["energy_weight"])
-        forces_weight = args.pop("forces_weight", d["forces_weight"])
-        stress_weight = args.pop("stress_weight", d["stress_weight"])
-        lr = args.pop("lr", d["lr"])
-        weight_decay = args.pop("weight_decay", d["weight_decay"])
-        device = args.pop("device", d["device"])
-        default_dtype = args.pop("default_dtype", d["default_dtype"])
-        max_num_epochs = args.pop("max_num_epochs", d["max_num_epochs"])
-        batch_size = args.pop("batch_size", d["batch_size"])
-        compute_stress = args.pop("compute_stress", d["compute_stress"])
-        loss = args.pop("loss", d["loss"])
+        td = self.DEFAULTS["run_train"]
+        valid_fraction = args.pop("valid_fraction", td["valid_fraction"])
+        energy_weight = args.pop("energy_weight", td["energy_weight"])
+        forces_weight = args.pop("forces_weight", td["forces_weight"])
+        stress_weight = args.pop("stress_weight", td["stress_weight"])
+        lr = args.pop("lr", td["lr"])
+        weight_decay = args.pop("weight_decay", td["weight_decay"])
+        device = args.pop("device", self.DEFAULTS["device"])
+        default_dtype = args.pop("default_dtype", self.DEFAULTS["default_dtype"])
+        max_num_epochs = args.pop("max_num_epochs", td["max_num_epochs"])
+        batch_size = args.pop("batch_size", td["batch_size"])
+        compute_stress = args.pop("compute_stress", td["compute_stress"])
+        loss = args.pop("loss", td["loss"])
         seed = args.pop("seed", self.seed)
-        fmhft = args.pop("force_mh_ft_lr", d["force_mh_ft_lr"])
+        fmhft = args.pop("force_mh_ft_lr", td["force_mh_ft_lr"])
 
         # --- SWA group ---
         flags: list[str] = []
-        if args.pop("swa", d["swa"]):
+        if args.pop("swa", td["swa"]):
             flags.extend([
                 "  --swa \\\n",
-                f"  --swa_lr {args.pop('swa_lr', d['swa_lr'])} \\\n",
-                f"  --start_swa {args.pop('start_swa', d['start_swa'])} \\\n",
-                f"  --swa_energy_weight {args.pop('swa_energy_weight', d['swa_energy_weight'])} \\\n",
-                f"  --swa_forces_weight {args.pop('swa_forces_weight', d['swa_forces_weight'])} \\\n",
-                f"  --swa_stress_weight {args.pop('swa_stress_weight', d['swa_stress_weight'])} \\\n",
+                f"  --swa_lr {args.pop('swa_lr', td['swa_lr'])} \\\n",
+                f"  --start_swa {args.pop('start_swa', td['start_swa'])} \\\n",
+                f"  --swa_energy_weight {args.pop('swa_energy_weight', td['swa_energy_weight'])} \\\n",
+                f"  --swa_forces_weight {args.pop('swa_forces_weight', td['swa_forces_weight'])} \\\n",
+                f"  --swa_stress_weight {args.pop('swa_stress_weight', td['swa_stress_weight'])} \\\n",
             ])
 
         # --- EMA group ---
-        if args.pop("ema", d["ema"]):
+        if args.pop("ema", td["ema"]):
             flags.extend([
                 "  --ema \\\n",
-                f"  --ema_decay {args.pop('ema_decay', d['ema_decay'])} \\\n",
+                f"  --ema_decay {args.pop('ema_decay', td['ema_decay'])} \\\n",
             ])
 
         # --- Remaining unknown args ---

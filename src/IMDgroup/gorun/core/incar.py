@@ -75,6 +75,42 @@ def _flatten_toml(raw: dict[str, object]) -> dict[str, object]:
     return result
 
 
+_NO_DEFAULT = object()
+
+
+def _resolve_default_value(
+    defaults: dict[str, object],
+    key_section: dict[str, str | None],
+    key: str,
+) -> object:
+    """Return the default value for *key* from structured *defaults*.
+
+    When *key* belongs to a section (via *key_section*), the
+    default is looked up inside that section's dict.  Otherwise
+    the top-level *defaults* dict is checked.
+
+    Returns :data:`_NO_DEFAULT` when no default is defined for
+    *key*.
+    """
+    section = key_section.get(key)
+    if section is not None and section in defaults:
+        section_dict = defaults[section]
+        if isinstance(section_dict, dict) and key in section_dict:
+            return section_dict[key]
+    if key in defaults and not isinstance(defaults[key], dict):
+        return defaults[key]
+    return _NO_DEFAULT
+
+
+def _key_in_defaults(
+    defaults: dict[str, object],
+    key_section: dict[str, str | None],
+    key: str,
+) -> bool:
+    """Return True when *key* has a default in structured *defaults*."""
+    return _resolve_default_value(defaults, key_section, key) is not _NO_DEFAULT
+
+
 def _toml_format_value(value: object) -> str:
     """Format a Python value for TOML output."""
     if isinstance(value, bool):
@@ -207,8 +243,10 @@ def write_incar_toml_sections(
     raw_existing:
         The previously-read ``INCAR.toml`` content (may be nested).
     defaults:
-        Hardcoded adapter defaults (flat).  Only non-default values
-        are written in update mode.
+        Hardcoded adapter defaults, possibly structured with
+        ``[section]`` sub-dicts matching TOML sections.  Only
+        non-default values are written in update mode.  Section
+        membership is resolved via *key_section*.
     always_include:
         Keys written even when matching defaults or empty.
     """
@@ -224,7 +262,7 @@ def write_incar_toml_sections(
 
     # Preserve user-owned keys from the existing file.
     for key, val in flat_raw.items():
-        if defaults is None or key not in defaults:
+        if defaults is None or not _key_in_defaults(defaults, key_section, key):
             merged[key] = val
 
     # Add adapter keys.
@@ -235,9 +273,11 @@ def write_incar_toml_sections(
             if val is None:
                 continue
             merged[key] = val
-        elif defaults is not None and key in defaults:
-            if val == defaults[key] and key not in flat_raw:
-                continue
+        elif defaults is not None:
+            default_val = _resolve_default_value(defaults, key_section, key)
+            if default_val is not _NO_DEFAULT:
+                if val == default_val and key not in flat_raw:
+                    continue
             merged[key] = val
         else:
             merged[key] = val
