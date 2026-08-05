@@ -14,11 +14,7 @@ clusters (e.g., Athena, Ares, Helios, LUMI).
 
     git clone https://git.sr.ht/~yantar92/IMDgroup-gorun
     cd IMDgroup-gorun
-    pip install ".[mace]"
-
-The `[mace]` extra installs `pandas` and `scikit-learn`, required for
-MACE fine-tuning (`.pkl` reading and train/val splitting).  Omit it
-if you only need VASP or ATAT support.
+    pip install .
 
 
 # Configuration
@@ -105,7 +101,7 @@ arguments specify the number of nodes and the time limit:
 
 -   **`--mark`:** Prepare the directory and create a `gorun_ready` marker
     file, but do not submit. Use `gorun-all-ready.sh` to submit
-    multiple marked directories later (see [5](#orga023bb7)).
+    multiple marked directories later (see [5](#org07ba5ff)).
 
 -   **`--force`:** Skip convergence checks and run VASP even if the
     directory already contains converged output.
@@ -215,10 +211,11 @@ The generated Slurm script exports `VASP_COMMAND` that points back to
 the ASE calculator to invoke.
 
 
-## `gorun mace-finetune` / `gorun mace` / `gorun-mace`
+## `gorun mace-finetune` / `gorun mace`
 
 Submit a MACE multihead fine-tuning job.  The canonical subcommand is
-`mace-finetune`.
+`mace-finetune`.  For backward compatibility, `gorun-mace-finetune`
+and `gorun-mace` are also available as top-level entry points.
 
 The workflow implements Method 1 from the MACE documentation &ndash; a
 two-stage multihead replay protocol:
@@ -236,7 +233,7 @@ Both stages run sequentially in a single Slurm job.
 If a `RUNFILE.sh` or `RUNFILE.py` exists in the working directory, its
 content replaces the canned two-stage workflow.  `RUNFILE.sh` takes
 precedence over `RUNFILE.py`.  Both are wrapped so they inherit the
-cluster environment (see [3.2](#org05bf820)).
+cluster environment (see [3.2](#org0cfb43e)).
 
 Use this when the standard two-stage protocol does not fit your use
 case &ndash; for example, when you want to run `mace.cli.eval` or a custom
@@ -245,34 +242,60 @@ training loop.
 
 ### Parameter file: INCAR.toml
 
-All MACE parameters can be stored in an `INCAR.toml` file in the
-working directory, analogous to how VASP reads `INCAR`.  This avoids
-repeating long CLI invocations and keeps the run configuration
-alongside the data.
+All MACE parameters are stored in `INCAR.toml` in the working
+directory, analogous to how VASP reads `INCAR`.  This avoids repeating
+long CLI invocations and keeps the run configuration alongside the
+data.
 
-`INCAR.toml` uses flat TOML with keys matching the attribute names
-(underscores).  For example:
+`INCAR.toml` uses TOML sections to route parameters to the correct
+stage:
+
+-   **Top-level:** gorun-specific keys (`model_path`, `replay_xyz`,
+    `data_path`, `split_ratio`, `e0s`, etc.) and shared keys
+    (`device`, `default_dtype`).
+-   **`[fine_tuning_select]`:** parameters forwarded to Stage 1
+    (`mace.cli.fine_tuning_select`): `num_samples`, `subselect`,
+    `filtering_type`, `weight_pt`, `weight_ft`, etc.
+-   **`[run_train]`:** parameters forwarded to Stage 2
+    (`mace.cli.run_train`): `batch_size`, `lr`, `max_num_epochs`,
+    `swa`, `ema`, and all their sub-options.
+
+Keys the adapter does not recognise default to `[run_train]`, so
+flat `INCAR.toml` files from earlier versions still work.
+
+Example:
 
     model_path = "13_MACE-MATPES-PBE-0_medium.model"
     replay_xyz = "matpes-pbe-replay-data.xyz"
     data_path = "result.pkl"
     e0s = "{3:-0.01686124,6:-1.26246048,11:-0.22829243}"
-    batch_size = 8
+    
+    [fine_tuning_select]
+    num_samples = 50000
+    subselect = "fps"
+    
+    [run_train]
+    batch_size = 12
+    lr = 0.0009
+    swa = true
+    ema = true
     max_num_epochs = 200
 
-Any parameter the adapter knows about can be set here, including ones
-without a corresponding CLI flag (e.g., `energy_weight`, `swa_lr`,
-`ema`).  Unknown keys are forwarded to `run_train` as `--key value`
-flags, so future MACE CLI additions work without code changes.
+Almost all MACE training hyperparameters live in `INCAR.toml`:
+`batch_size`, `lr`, `weight_decay`, `max_num_epochs`, `swa`,
+`swa_lr`, `start_swa`, `ema`, `ema_decay`, `energy_weight`,
+`forces_weight`, `stress_weight`, `valid_fraction`, `compute_stress`,
+`loss`, `force_mh_ft_lr`, `device`, `default_dtype`, etc.
 
 When no `INCAR.toml` exists, `gorun mace-finetune` bootstraps a full
 template with every parameter at its default value.  You can then edit
 the file to adjust parameters.
 
-**Precedence**: CLI arguments override `INCAR.toml` values, which
-override hardcoded adapter defaults.  For example, with `INCAR.toml`
-setting `batch_size = 8`, running `gorun mace-finetune` uses 8.
-Adding `--batch-size 16` overrides to 16.
+**Precedence**: `--incar` overrides (highest) > explicit CLI flags >
+`INCAR.toml` values > hardcoded adapter defaults.  For example, with
+`INCAR.toml` setting `batch_size = 8` in `[run_train]`, running
+`gorun mace-finetune` uses 8.  Adding `--incar run_train.batch_size:16`
+overrides to 16.
 
 **Write-back**: After parsing, if the merged parameters differ from the
 existing file, `INCAR.toml` is updated (with the previous version
@@ -284,7 +307,14 @@ preserved across writes.  Gorun-level flags (`force`, `local`,
 `keep`, etc.) in `INCAR.toml` trigger a warning and are ignored.
 
 
-### Options
+### Options (gorun-specific)
+
+Only workflow and data-source parameters are CLI flags.  All MACE
+training hyperparameters live in `INCAR.toml` and can be overridden
+via `--incar`.
+
+
+### Data source
 
 -   **`--model-path PATH`:** Path to the foundation model (`.model` file).
     Required unless set in `INCAR.toml`.
@@ -292,25 +322,23 @@ preserved across writes.  Gorun-level flags (`force`, `local`,
 -   **`--replay-xyz PATH`:** Path to the replay/reference data (`.xyz`
     file).  Required unless set in `INCAR.toml`.
 
-
-### Data source (pick one)
-
 -   **`--data-path PATH`:** Single training file (`.xyz` or `.pkl`).
     Split into train/val using `--split-ratio` (default: `0.20`).
+    Set in `INCAR.toml` or on the CLI.
 
--   **`--train-data-path PATH` + `--val-data-path PATH`:** Pre-split training and
-    validation files (`.xyz` or `.pkl`).  Both must be provided
-    together.
+-   **`--train-data-path PATH` + `--val-data-path PATH`:** Pre-split
+    training and validation files (`.xyz` or `.pkl`).  Both must be
+    provided together.  Set in `INCAR.toml` or on the CLI.
 
--   **`--split-ratio FLOAT`:** Fraction of `--data-path` to use for validation
-    (default: `0.20`).
+-   **`--split-ratio FLOAT`:** Fraction of `--data-path` to use for
+    validation (default: `0.20`).
 
 If neither `--data-path` nor the pre-split pair is given, the adapter
 expects an existing `train.xyz` in the working directory (use
 `--keep` to preserve it).
 
 
-### Output
+### Output & workflow
 
 -   **`--new-model-name NAME`:** Name for the output fine-tuned model
     (default: `finetuned_model.model`).
@@ -320,41 +348,22 @@ expects an existing `train.xyz` in the working directory (use
 
 -   **`--e0s STR`:** E0s string for `heads.json` (default: empty).
 
-
-### Training hyperparameters
-
--   **`--batch-size N`:** Training batch size (default: `6`).
-
--   **`--max-num-epochs N`:** Maximum training epochs (default: `100`).
-
--   **`--lr FLOAT`:** Learning rate (default: `0.0009`).
-
--   **`--weight-decay FLOAT`:** Weight decay (default: `5e-9`).
-
--   **`--valid-fraction FLOAT`:** Fraction of training data for internal
-    validation during training (default: `0.05`).
+-   **`--no-fine-tuning-select`:** Skip Stage 1 (useful if
+    `selected_configs.xyz` already exists).
 
 
-### Stage 1: fine<sub>tuning</sub><sub>select</sub>
+### INCAR.toml overrides
 
--   **`--num-samples N`:** Number of samples for `fine_tuning_select`
-    (default: `30000`).
+-   **`--incar KEY:VAL ...`:** Override any `INCAR.toml` parameter from
+    the command line.  Use dot notation to target a section:
+    `--incar run_train.lr:0.001 fine_tuning_select.num_samples:50000`.
+    Bare keys (no dot) default to `[run_train]`:
+    `--incar batch_size:16`.
 
--   **`--subselect METHOD`:** Subselection method for replay data.
-    Choices: `fps` (farthest point sampling), `random` (default:
-    `fps`).
-
--   **`--filtering-type TYPE`:** Element filtering for replay data.
-    Choices: `combinations`, `exclusive`, `inclusive`, `none`
-    (default: `exclusive`).
-
--   **`--no-fine-tuning-select`:** Skip the `fine_tuning_select` stage
-    (useful if `selected_configs.xyz` already exists).
-
-
-### Hardware
-
--   **`--device STR`:** Compute device (default: `cuda`).
+This is the primary mechanism for adjusting MACE training parameters
+when running from the CLI.  For example, to override the learning
+rate and number of epochs without editing `INCAR.toml`:
+`--incar run_train.lr:0.0005 run_train.max_num_epochs:150`.
 
 
 ### Shared flags
@@ -424,13 +433,14 @@ Before submission, `gorun mace-finetune` runs the following steps:
         --no-fine-tuning-select \
         48:00:00
     
-    # Keep existing xyz files, custom seed and batch size
+    # Keep existing xyz files, override training params via --incar
     gorun mace-finetune \
         --model-path foundation.model \
         --replay-xyz replay.xyz \
         --data-path result.pkl \
         --keep train.xyz --keep val.xyz \
-        --seed 42 --batch-size 4
+        --seed 42 \
+        --incar run_train.batch_size:4 run_train.lr:0.0005
     
     # Prepare for later batch submission
     gorun mace-finetune \
@@ -444,7 +454,7 @@ Before submission, `gorun mace-finetune` runs the following steps:
     # (model_path, replay_xyz, data_path, e0s, etc. read from INCAR.toml)
     
     # INCAR.toml provides defaults; override batch size from CLI
-    gorun mace-finetune --batch-size 16
+    gorun mace-finetune --incar run_train.batch_size:16
     
     # First run in a directory: bootstraps INCAR.toml with all defaults
     gorun mace-finetune --model-path foundation.model --replay-xyz replay.xyz --data-path result.pkl
@@ -452,11 +462,12 @@ Before submission, `gorun mace-finetune` runs the following steps:
     # Backward-compatible shorthand (gorun mace)
     gorun mace --model-path foundation.model --replay-xyz replay.xyz --data-path result.pkl
     
-    # Backward-compatible entry point (gorun-mace)
+    # Backward-compatible entry points
     gorun-mace --model-path foundation.model --replay-xyz replay.xyz --data-path result.pkl
+    gorun-mace-finetune --model-path foundation.model --replay-xyz replay.xyz --data-path result.pkl
 
 
-## `gorun-maps`
+## `gorun maps`
 
 Wrapper to submit ATAT's `maps` (Cluster Expansion) code to Slurm.
 Launches `maps` on the compute node and configures it to use
@@ -502,19 +513,19 @@ Launches `maps` on the compute node and configures it to use
 ### Examples
 
     # Basic cluster-expansion run
-    gorun-maps --kpoints=3000 --max_strain=0.1
+    gorun maps --kpoints=3000 --max_strain=0.1
     
     # Skip relaxation (SCF only), tighter strain tolerance
-    gorun-maps --kpoints=4000 --max_strain=0.05 --skip_relax
+    gorun maps --kpoints=4000 --max_strain=0.05 --skip_relax
     
     # Custom sublattice deviation cutoff
-    gorun-maps --kpoints=3000 --sublattice_cutoff=0.15
+    gorun maps --kpoints=3000 --sublattice_cutoff=0.15
     
     # Pass additional arguments to maps
-    gorun-maps --kpoints=3000 --maps_args="-e=4 -gs=0.001"
+    gorun maps --kpoints=3000 --maps_args="-e=4 -gs=0.001"
 
 
-## `gorun-atat-local`
+## `gorun atat-local`
 
 Worker script invoked by ATAT's `pollmach` to run individual
 structural calculations. Each call processes a single `str.out`
