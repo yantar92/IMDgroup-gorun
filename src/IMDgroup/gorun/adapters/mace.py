@@ -166,9 +166,8 @@ def _format_cli_args(args: dict[str, object]) -> str:
     """Format a dict as ``--key value \\`` lines.
 
     Boolean ``True`` values produce ``--key`` (flag without value).
-    Boolean ``False`` values are silently skipped (they are the
-    default for most CLI flags and passing ``--no-key`` is rarely
-    supported).
+    Boolean ``False``, ``None``, and empty-string values are silently
+    skipped (they are defaults that should not produce CLI flags).
     """
     if not args:
         return ""
@@ -178,7 +177,7 @@ def _format_cli_args(args: dict[str, object]) -> str:
         if isinstance(val, bool):
             if val:
                 lines.append(f"  --{cli_key} \\")
-        else:
+        elif val is not None and val != "":
             lines.append(f"  --{cli_key} {val} \\")
     return "\n".join(lines)
 
