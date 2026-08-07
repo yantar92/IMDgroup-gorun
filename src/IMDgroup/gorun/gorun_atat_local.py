@@ -44,7 +44,6 @@ from IMDgroup.pymatgen.cli.imdg_derive import atat as derive_atat
 from IMDgroup.pymatgen.cli.imdg_derive import scf as derive_scf
 from IMDgroup.pymatgen.core.structure import structure_is_valid2
 import IMDgroup.pymatgen.io.atat as atat
-from pymatgen.io.vasp.outputs import Vasprun
 from IMDgroup.pymatgen.core.structure import IMDStructure as Structure, structure_distance
 from IMDgroup.pymatgen.io.vasp.vaspdir import IMDGVaspDir
 
@@ -64,7 +63,7 @@ def _run_vasp(vasp_command: list[str], directory: str) -> Vasprun | bool:
     existing = IMDGVaspDir(Path(directory))
     if existing.converged:
         print(f"{directory} already contains converged output.  Not running VASP")
-        return Vasprun(Path(directory) / "vasprun.xml")
+        return existing['vasprun.xml']
 
     print(f"{datetime.datetime.now()} Running {vasp_command} in {directory}")
     result = subprocess.run(vasp_command, shell=False, cwd=directory, check=False)
