@@ -173,7 +173,7 @@ time = '72:00:00'
 #
 # On systems without a container, leave GORUN_WRAPPER empty or unset;
 # the adapter runs the Python command directly.
-[lumi.mace]
+[lumi.gpu]
 # Adapter-specific queues override the server-level ``queues`` list.
 # When present, gorun uses these queues instead of the server default.
 queues = ['small-g']
