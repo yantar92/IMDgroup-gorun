@@ -78,36 +78,12 @@ from ase.io import read, write
 from sklearn.model_selection import train_test_split
 from termcolor import colored
 
+from IMDgroup.gorun.adapters.gpu import GpuAdapter, _wrap_command
 from IMDgroup.gorun.core.files import maybe_regenerate
 from IMDgroup.gorun.core.incar import (
     read_incar_toml,
     write_incar_toml_sections,
 )
-
-
-# ---------------------------------------------------------------------------
-# Wrapper helper
-# ---------------------------------------------------------------------------
-
-def _wrap_command(command: str) -> str:
-    """Wrap *command* in a heredoc passed to ``GORUN_WRAPPER``.
-
-    ``${GORUN_WRAPPER:-bash}`` ensures the heredoc is always piped to
-    a shell: the configured wrapper when ``GORUN_WRAPPER`` is set, or
-    plain ``bash`` otherwise.  This avoids duplicating *command* in
-    an ``if/else`` branch.
-
-    The heredoc is quoted (``<<'EOF'``) so the outer shell does not
-    expand ``${GORUN_INNER_SETUP}`` before passing it through; the
-    inner shell expands it.  Both variables are expected to be exported
-    by the config's ``setup`` commands.
-    """
-    return (
-        "${GORUN_WRAPPER:-bash} <<'EOF'\n"
-        "${GORUN_INNER_SETUP:-}\n"
-        f"{command}\n"
-        "EOF"
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -187,7 +163,7 @@ def _format_cli_args(args: dict[str, object]) -> str:
 # ---------------------------------------------------------------------------
 
 
-class MaceMultiheadFinetuneAdapter:
+class MaceMultiheadFinetuneAdapter(GpuAdapter):
     """``gorun mace-finetune`` backend for multihead fine-tuning.
 
     Two-stage workflow (override with ``RUNFILE.sh`` or ``RUNFILE.py``):
@@ -335,6 +311,9 @@ class MaceMultiheadFinetuneAdapter:
         raw_toml = read_incar_toml()
         if incar_overrides is None:
             incar_overrides = {}
+
+        # --- Call GpuAdapter init ---
+        super().__init__()
 
         # --- Extract section defaults from DEFAULTS ---
         select_defaults: dict[str, object] = dict(
@@ -526,6 +505,19 @@ class MaceMultiheadFinetuneAdapter:
                 "Required files not found: " + ", ".join(missing)
             )
 
+    def setup_commands(self, server_config: dict) -> str:
+        """Read MACE environment, falling back to ``[gpu]`` config.
+
+        Looks for ``server_config["mace"]["setup"]`` first.  If that
+        section is missing or empty, falls back to
+        ``server_config["gpu"]["setup"]``.  This allows sharing a
+        common GPU environment across multiple adapters.
+        """
+        mace_setup = server_config.get("mace", {}).get("setup", "")
+        if mace_setup:
+            return mace_setup
+        return server_config.get("gpu", {}).get("setup", "")
+
     # ------------------------------------------------------------------
     # Directory inspection
     # ------------------------------------------------------------------
@@ -685,18 +677,6 @@ class MaceMultiheadFinetuneAdapter:
     # ------------------------------------------------------------------
     # Script generation
     # ------------------------------------------------------------------
-
-    def setup_commands(self, server_config: dict) -> str:
-        """Extract MACE environment from config.
-
-        Reads ``server_config["mace"]["setup"]``, a raw shell string
-        that must export ``GORUN_WRAPPER`` and
-        ``GORUN_INNER_SETUP``.  All other environment variables
-        (PyTorch flags, cache directories, ``OMP_NUM_THREADS``,
-        etc.) belong in this string as well -- nothing is hard-coded
-        here.
-        """
-        return server_config.get(self.name, {}).get("setup", "")
 
     def generate_run_commands(self, path: Path) -> str:
         """Return a two-stage bash body, or a RUNFILE if present.

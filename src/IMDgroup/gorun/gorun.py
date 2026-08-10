@@ -27,6 +27,7 @@
 Usage:
     gorun vasp [OPTS] [NODES] [TIME-LIMIT]
     gorun mace [OPTS] [TIME-LIMIT]
+    gorun gpu [OPTS] [TIME-LIMIT]
 
 For backward compatibility, plain ``gorun [OPTS] [NODES] [TIME-LIMIT]``
 is treated as ``gorun vasp``.
@@ -43,6 +44,7 @@ from termcolor import colored
 from IMDgroup.gorun.core.pipeline import dispatch_run
 from IMDgroup.gorun.adapters.vasp import VaspAdapter
 from IMDgroup.gorun.adapters.mace import MaceMultiheadFinetuneAdapter
+from IMDgroup.gorun.adapters.gpu import GpuAdapter
 from IMDgroup.gorun.adapters.maps_adapter import MapsAdapter
 from IMDgroup.gorun.adapters.atat_local import AtatLocalAdapter
 
@@ -65,7 +67,7 @@ warnings.showwarning = _showwarning
 # Known subcommands
 # ---------------------------------------------------------------------------
 
-_SUBCOMMANDS = {"vasp", "mace", "mace-finetune", "maps", "atat-local"}
+_SUBCOMMANDS = {"vasp", "mace", "mace-finetune", "maps", "atat-local", "gpu"}
 
 
 def _is_subcommand(name: str) -> bool:
@@ -320,6 +322,31 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Maximum allowed sublattice deviation.",
     )
 
+    ## gpu
+    gpu_parser = subparsers.add_parser(
+        "gpu",
+        parents=[shared],
+        help="Submit a generic GPU job (requires RUNFILE.sh or RUNFILE.py).",
+        description="Queue a GPU run defined by RUNFILE.sh or RUNFILE.py.",
+        epilog=(
+            "Place RUNFILE.sh or RUNFILE.py in the working directory to\n"
+            "define the computation.  RUNFILE.sh takes precedence over\n"
+            "RUNFILE.py.  Use --script-name to use a different file.\n"
+            "\n"
+            "GPU environment (module loads, PyTorch flags, etc.) is read\n"
+            "from the server config under [gpu] → setup."
+        ),
+    )
+    gpu_parser.add_argument(
+        "time_limit", nargs="?", default=None,
+        help="Time limit in HH:MM:SS (optional; defaults come from config).",
+    )
+    gpu_parser.add_argument(
+        "--script-name", default=None,
+        help="Script to run instead of RUNFILE.sh/py.  .py → python -u; "
+        "otherwise → bash.",
+    )
+
     return parser
 
 
@@ -446,6 +473,11 @@ def _make_atat_local_adapter(args: argparse.Namespace) -> AtatLocalAdapter:
     )
 
 
+def _make_gpu_adapter(args: argparse.Namespace) -> GpuAdapter:
+    """Build a GpuAdapter from parsed CLI args."""
+    return GpuAdapter(script_name=args.script_name)
+
+
 # ---------------------------------------------------------------------------
 # Entry points
 # ---------------------------------------------------------------------------
@@ -472,13 +504,15 @@ def main(argv: list[str] | None = None) -> int:
         adapter = _make_maps_adapter(args)
     elif args.software == "atat-local":
         adapter = _make_atat_local_adapter(args)
+    elif args.software == "gpu":
+        adapter = _make_gpu_adapter(args)
     else:
         print(colored(f"Unknown software: {args.software}", "red"))
         return 1
 
     # Inject number_of_nodes=None for subcommands that don't use it
     # (get_sbatch_args needs the attribute to exist).
-    if args.software in ("mace-finetune", "atat-local"):
+    if args.software in ("mace-finetune", "atat-local", "gpu"):
         args.number_of_nodes = None
 
     return dispatch_run(args, adapter)

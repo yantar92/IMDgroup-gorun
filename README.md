@@ -101,7 +101,7 @@ arguments specify the number of nodes and the time limit:
 
 -   **`--mark`:** Prepare the directory and create a `gorun_ready` marker
     file, but do not submit. Use `gorun-all-ready.sh` to submit
-    multiple marked directories later (see [5](#org07ba5ff)).
+    multiple marked directories later (see [5](#org968d1d6)).
 
 -   **`--force`:** Skip convergence checks and run VASP even if the
     directory already contains converged output.
@@ -233,7 +233,7 @@ Both stages run sequentially in a single Slurm job.
 If a `RUNFILE.sh` or `RUNFILE.py` exists in the working directory, its
 content replaces the canned two-stage workflow.  `RUNFILE.sh` takes
 precedence over `RUNFILE.py`.  Both are wrapped so they inherit the
-cluster environment (see [3.2](#org0cfb43e)).
+cluster environment (see [3.2](#org846bf9f)).
 
 Use this when the standard two-stage protocol does not fit your use
 case &ndash; for example, when you want to run `mace.cli.eval` or a custom
@@ -465,6 +465,66 @@ Before submission, `gorun mace-finetune` runs the following steps:
     # Backward-compatible entry points
     gorun-mace --model-path foundation.model --replay-xyz replay.xyz --data-path result.pkl
     gorun-mace-finetune --model-path foundation.model --replay-xyz replay.xyz --data-path result.pkl
+
+
+## `gorun gpu`
+
+Submit a generic GPU job from the current directory.  The computation
+is defined by a `RUNFILE.sh` or `RUNFILE.py` in the working directory
+(`RUNFILE.sh` takes precedence).  Use `--script-name` to specify a
+different file.
+
+GPU environment setup (module loads, PyTorch flags, cache directories,
+`OMP_NUM_THREADS`, etc.) is read from the server config under
+`[gpu]` → `setup`::
+
+    [lumi.gpu]
+    setup = """\\
+    module use /appl/local/laifs/modules
+    module load lumi-aif-singularity-bindings
+    export GORUN_WRAPPER="singularity exec ... bash"
+    export GORUN_INNER_SETUP="... module loads inside the container ..."
+    """
+
+If a derived adapter (e.g. MACE) has its own `[<name>]` section, it
+takes precedence; `[gpu]` is only used as a fallback when the
+adapter-specific section is missing or empty (see
+`gorun mace-finetune`).
+
+The RUNFILE is wrapped in a heredoc passed through `GORUN_WRAPPER`
+and `GORUN_INNER_SETUP`, so it inherits the configured environment
+automatically.
+
+
+### Options
+
+-   **`--script-name NAME`:** Script to run instead of `RUNFILE.sh` /
+    `RUNFILE.py`.  `.py` files are run with `python -u`; everything
+    else (including `.sh`) with `bash`.
+
+-   **`TIME`:** Positional argument: time limit in `hh:mm:ss` format
+    (optional; defaults come from the config).
+
+
+### Examples
+
+    # Use the default RUNFILE.sh in the current directory
+    gorun gpu 48:00:00
+    
+    # Use a custom script
+    gorun gpu --script-name train.py 24:00:00
+    
+    # Run locally for testing
+    gorun gpu --local
+    
+    # Prepare directory for later batch submission
+    gorun gpu --mark 48:00:00
+    
+    # Submit to a specific queue
+    gorun gpu --queue plgrid-gpu-a100 24:00:00
+    
+    # Custom script + keep marker
+    gorun gpu --script-name eval.sh --mark
 
 
 ## `gorun maps`
