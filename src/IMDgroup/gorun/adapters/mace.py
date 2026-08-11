@@ -202,6 +202,7 @@ class MaceMultiheadFinetuneAdapter(GpuAdapter):
         "seed": 1,
         "e0s": "",
         "no_fine_tuning_select": False,
+        "masked_loss": False,
         # Top-level — shared between both stages
         "device": "cuda",
         "default_dtype": "float64",
@@ -283,6 +284,7 @@ class MaceMultiheadFinetuneAdapter(GpuAdapter):
         e0s: str | None = None,
         # Workflow
         no_fine_tuning_select: bool | None = None,
+        masked_loss: bool | None = None,
         # INCAR.toml overrides
         incar_overrides: dict[str | None, dict[str, str]] | None = None,
     ) -> None:
@@ -393,6 +395,8 @@ class MaceMultiheadFinetuneAdapter(GpuAdapter):
             cli_kwargs["e0s"] = e0s
         if no_fine_tuning_select is not None:
             cli_kwargs["no_fine_tuning_select"] = no_fine_tuning_select
+        if masked_loss is not None:
+            cli_kwargs["masked_loss"] = masked_loss
         merged_top.update(cli_kwargs)
 
         # --- Copy shared keys into both stage dicts ---
@@ -415,6 +419,7 @@ class MaceMultiheadFinetuneAdapter(GpuAdapter):
         self.e0s: str = merged_top.get("e0s", "")
         self.no_fine_tuning_select: bool = merged_top.get(
             "no_fine_tuning_select", False)
+        self.masked_loss: bool = merged_top.get("masked_loss", False)
 
         #: Extra CLI flags forwarded to ``fine_tuning_select``.
         self._select_args: dict[str, object] = merged_select
@@ -762,6 +767,11 @@ class MaceMultiheadFinetuneAdapter(GpuAdapter):
         SWA and EMA are handled as boolean toggle groups (sub-args
         only emitted when the toggle is on).
         """
+        training_module = (
+            'IMDgroup.gorun.adapters._mace_train_masked'
+            if self.masked_loss
+            else 'mace.cli.run_train'
+        )
         args = dict(self._train_args)
         heads_path = path / "heads.json"
 
@@ -806,7 +816,7 @@ class MaceMultiheadFinetuneAdapter(GpuAdapter):
 
         return (
             'echo "=== Stage 2: run_train ==="\n'
-            "python -u -m mace.cli.run_train \\\n"
+            f"python -u -m {training_module} \\\n"
             f"  --name {self.new_model_name} \\\n"
             "  --multiheads_finetuning True \\\n"
             f'  --heads "$(cat {heads_path})" \\\n'

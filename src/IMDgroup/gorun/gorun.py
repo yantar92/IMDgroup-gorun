@@ -245,6 +245,15 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Skip the fine_tuning_select stage.",
     )
     mace_parser.add_argument(
+        "--masked-loss", action="store_true",
+        default=argparse.SUPPRESS,
+        help="Use mask-aware loss that detaches masked atoms' site energies "
+        "and atomic stresses from autograd.  Atoms with atom_mask=0 in the "
+        "batch are excluded from direct energy/stress supervision but still "
+        "contribute via neighbour message passing.  Falls back to standard "
+        "loss when atom_mask is absent.",
+    )
+    mace_parser.add_argument(
         "--incar", nargs="+", default=None,
         metavar="KEY:VAL",
         help="Override INCAR.toml parameters.  "
@@ -444,6 +453,7 @@ def _make_mace_adapter(args: argparse.Namespace) -> MaceMultiheadFinetuneAdapter
         seed=getattr(args, 'seed', None),
         e0s=getattr(args, 'e0s', None),
         no_fine_tuning_select=getattr(args, 'no_fine_tuning_select', None),
+        masked_loss=getattr(args, 'masked_loss', None),
         incar_overrides=incar_overrides,
     )
 
