@@ -47,7 +47,7 @@ import logging
 import torch
 
 import mace.modules.loss as mace_loss
-from mace.tools.torch_geometric import scatter_sum
+from mace.tools.scatter import scatter_sum
 
 logger = logging.getLogger(__name__)
 
