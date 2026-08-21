@@ -16,6 +16,7 @@ gres = 'gpu:8'
 cpus-per-task = 1
 mem = '40G'
 constraint = '"memfs"'
+account = 'plgkeyteche3-gpu-a100'
 
 [athena.plgrid-gpu-a100]
 type = 'GPU'
@@ -88,7 +89,7 @@ nodes = 1
 time  = '72:00:00'
 ntasks-per-node = 96
 mem = '50G'
-account = 'plgkeytech2-cpu'
+account = 'plgkeyteche3-cpu'
 
 [helios.plgrid]
 type = 'CPU'
