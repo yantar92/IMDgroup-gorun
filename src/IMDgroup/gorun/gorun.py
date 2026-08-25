@@ -67,7 +67,7 @@ warnings.showwarning = _showwarning
 # Known subcommands
 # ---------------------------------------------------------------------------
 
-_SUBCOMMANDS = {"vasp", "mace", "mace-finetune", "maps", "atat-local", "gpu"}
+_SUBCOMMANDS = {"vasp", "mace-finetune", "maps", "atat-local", "gpu"}
 
 
 def _is_subcommand(name: str) -> bool:
@@ -118,7 +118,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Path to TOML config (default: $IMDGroup/dist/etc/gorun.toml).",
     )
     shared.add_argument(
-        "--keep", action="append", default=[],
+        "--keep", action="append", default=None,
         metavar="FILE",
         help="Do not regenerate FILE if it already exists (repeatable).",
     )
@@ -402,6 +402,8 @@ def _make_vasp_adapter(args: argparse.Namespace) -> VaspAdapter:
             incar_mods[key] = val
 
     # Backward compat: --keep-potcar / --keep-poscar → --keep
+    if args.keep is None:
+        args.keep = []
     if args.keep_potcar and "POTCAR" not in args.keep:
         args.keep.append("POTCAR")
     if args.keep_poscar and "POSCAR" not in args.keep:
@@ -488,24 +490,40 @@ def _make_gpu_adapter(args: argparse.Namespace) -> GpuAdapter:
     return GpuAdapter(script_name=args.script_name)
 
 
-# ---------------------------------------------------------------------------
-# Entry points
-# ---------------------------------------------------------------------------
+def _fill_namespace_defaults(args: argparse.Namespace) -> argparse.Namespace:
+    """Fill missing attributes in *args* with subcommand defaults.
+
+    Pre-rewrite ``gorun.run`` accepted an ``argparse.Namespace`` and
+    merged it with parser defaults.  The subcommand is read from
+    ``args.software``; when it is absent or not a registered
+    subcommand, ``vasp`` is used.
+    """
+    software = getattr(args, "software", None) or "vasp"
+    if software not in _SUBCOMMANDS:
+        software = "vasp"
+
+    argv = [software]
+    # ``maps`` and ``atat-local`` require ``--kpoints``; supply an empty
+    # placeholder so the bare subcommand parses.  A caller that already
+    # set ``kpoints`` is unaffected (we only fill missing attributes).
+    if software in ("maps", "atat-local"):
+        argv += ["--kpoints", ""]
+
+    defaults = _build_parser().parse_args(argv)
+    for key, value in vars(defaults).items():
+        if not hasattr(args, key):
+            setattr(args, key, value)
+
+    args.software = software
+    return args
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Parse args, build adapter, and dispatch."""
-    if argv is None:
-        argv = sys.argv[1:]
-
-    args = _parse_args(argv)
-
-    # Subcommand not given?  Show help rather than failing silently.
+def _dispatch_namespace(args: argparse.Namespace) -> int:
+    """Build the adapter for *args* and run the dispatch pipeline."""
     if not args.software:
         _build_parser().print_help()
         return 1
 
-    # Build adapter
     if args.software == "vasp":
         adapter = _make_vasp_adapter(args)
     elif args.software == "mace-finetune":
@@ -528,6 +546,19 @@ def main(argv: list[str] | None = None) -> int:
     return dispatch_run(args, adapter)
 
 
+# ---------------------------------------------------------------------------
+# Entry points
+# ---------------------------------------------------------------------------
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Parse args, build adapter, and dispatch."""
+    if argv is None:
+        argv = sys.argv[1:]
+
+    return _dispatch_namespace(_parse_args(argv))
+
+
 def main_mace(argv: list[str] | None = None) -> int:
     """Convenience entry point for ``gorun-mace`` (backward compat)."""
     if argv is None:
@@ -535,6 +566,18 @@ def main_mace(argv: list[str] | None = None) -> int:
     return main(["mace-finetune"] + argv)
 
 
-# Keep run() for backward compatibility with any external callers.
-# It delegates to main().
-run = main
+def run(args=None) -> int:
+    """Run gorun from a Namespace or argv list.
+
+    Pre-rewrite callers passed an ``argparse.Namespace`` (for example
+    ``gorun.run(argparse.Namespace(mark=True))``).  Missing attributes
+    are filled from the subcommand defaults selected by
+    ``args.software`` (``vasp`` when absent or unknown).  Calling with
+    no arguments is equivalent to an empty Namespace (the old default).
+    A list of command-line arguments delegates to :func:`main`.
+    """
+    if args is None:
+        args = argparse.Namespace()
+    if isinstance(args, argparse.Namespace):
+        return _dispatch_namespace(_fill_namespace_defaults(args))
+    return main(args)
