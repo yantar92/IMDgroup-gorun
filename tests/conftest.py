@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+import gzip
+import os
+import shutil
+import stat
 from collections.abc import Callable
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -108,3 +114,122 @@ def run_subprocess(commands: dict[str, object]) -> Callable:
         raise AssertionError(f"Unexpected command: {cmd!r}")
 
     return fake
+
+
+@pytest.fixture
+def fake_cluster(monkeypatch, tmp_path):
+    """Build a fake cluster boundary for end-to-end integration tests.
+
+    Creates a ``fakebin/`` directory of executable shims (=sbatch=,
+    =squeue=, =uname=, =date=, =rsync=) and a fake =VASP_PATH= tree,
+    prepends =fakebin= to =PATH=, and sets the environment the gorun
+    entry points expect.  Every fake binary appends its invocation to
+    the log file exposed as ``ns.log``.
+
+    This is used by the =integration= tests in =test_integration.py= to
+    run the real gorun pipeline against a fake cluster without a Slurm
+    scheduler, VASP binary, or pseudopotential library.
+    """
+    fakebin = tmp_path / "fakebin"
+    fakebin.mkdir()
+    vasp_path = tmp_path / "fakevasp"
+    (vasp_path / "bin").mkdir(parents=True)
+    (vasp_path / "pp").mkdir()
+    log = tmp_path / "fake.log"
+
+    def _chmod_x(path: Path) -> None:
+        path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+    def write_bin(name: str, body: str) -> None:
+        p = fakebin / name
+        p.write_text(body)
+        _chmod_x(p)
+
+    write_bin(
+        "sbatch",
+        '#!/bin/sh\n'
+        'echo "sbatch $*" >> "$GORUN_FAKE_LOG"\n'
+        'case "$*" in\n'
+        '  *--test-only*)\n'
+        '    echo "sbatch: Job 123 to start at 2026-08-25T14:00:00 using 8 processors on nodes n001 in partition cpu"\n'
+        '    ;;\n'
+        '  *)\n'
+        '    exit 0\n'
+        '    ;;\n'
+        'esac\n',
+    )
+    write_bin(
+        "squeue",
+        '#!/bin/sh\n'
+        'echo "squeue $*" >> "$GORUN_FAKE_LOG"\n'
+        'exit 0\n',
+    )
+    write_bin("uname", '#!/bin/sh\necho "testhost"\n')
+    write_bin(
+        "date",
+        '#!/bin/sh\n'
+        'echo "date $*" >> "$GORUN_FAKE_LOG"\n'
+        'echo "2026-08-25T13:00:00"\n',
+    )
+    write_bin(
+        "rsync",
+        '#!/bin/sh\n'
+        'echo "rsync $*" >> "$GORUN_FAKE_LOG"\n'
+        'exit 0\n',
+    )
+
+    for name in ("vasp_ncl", "vasp_std", "vasp_gam"):
+        p = vasp_path / "bin" / name
+        p.write_text(
+            "#!/bin/sh\n"
+            f'echo "vasp {name}" >> "$GORUN_FAKE_LOG"\n'
+            'touch vasp_ran\n'
+            'exit 0\n'
+        )
+        _chmod_x(p)
+
+    monkeypatch.setenv(
+        "PATH",
+        str(fakebin)
+        + os.pathsep
+        + (os.environ.get("PATH") or "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"),
+    )
+    monkeypatch.setenv("GORUN_FAKE_LOG", str(log))
+    monkeypatch.setenv("VASP_PATH", str(vasp_path))
+    monkeypatch.setenv("VASP_PP_PATH", str(vasp_path / "pp"))
+    monkeypatch.setenv("CLUSTER_NAME", "testhost")
+
+    return SimpleNamespace(fakebin=fakebin, vasp_path=vasp_path, log=log)
+
+
+@pytest.fixture
+def converged_vasp_dir(tmp_path):
+    """Decompress a real converged VASP run into a fresh tmp directory.
+
+    Reads =tests/fixtures/vasp_converged/=, gunzips the large output
+    files (=OUTCAR.gz=, =vasprun.xml.gz=) and copies the small plain
+    files.  Used by the =integration= tests to exercise the gorun
+    pipeline against realistic, genuinely converged VASP output
+    (produced by =scripts/prepare_vasp_fixtures.sh=).
+
+    Skips when the compressed output files are absent, since they are
+    not committed as plain text and must be generated first.
+    """
+    src = Path(__file__).parent / "fixtures" / "vasp_converged"
+    required_gz = ("OUTCAR.gz", "vasprun.xml.gz")
+    missing = [name for name in required_gz if not (src / name).is_file()]
+    if missing:
+        pytest.skip(
+            "missing converged VASP fixtures: "
+            + ", ".join(missing)
+            + ".  Run scripts/prepare_vasp_fixtures.sh <vasp-dir> first."
+        )
+
+    for entry in src.iterdir():
+        if entry.suffix == ".gz":
+            target = tmp_path / entry.stem
+            with gzip.open(entry, "rb") as fin, open(target, "wb") as fout:
+                shutil.copyfileobj(fin, fout)
+        else:
+            shutil.copy(entry, tmp_path / entry.name)
+    return tmp_path

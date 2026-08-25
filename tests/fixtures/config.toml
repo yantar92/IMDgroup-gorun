@@ -1,0 +1,23 @@
+[cluster.names]
+testserver = ["testhost"]
+
+[testserver]
+queues = ["cpu"]
+shebang = "#!/usr/bin/env bash"
+mpiexec = ""
+
+[testserver.defaults.sbatch]
+account = "default"
+
+[testserver.vasp]
+setup = ""
+
+[testserver.gpu]
+setup = ""
+
+[testserver.cpu]
+partition = "cpu"
+
+[testserver.cpu.sbatch]
+partition = "cpu"
+time = "01:00:00"

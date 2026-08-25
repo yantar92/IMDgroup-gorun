@@ -1,0 +1,2 @@
+ENCUT = 400
+EDIFF = 1e-6
