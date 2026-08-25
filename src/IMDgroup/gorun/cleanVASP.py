@@ -153,10 +153,12 @@ def clean_vasp_input(file_path: str) -> None:
         content = file.read()
 
     # Remove any unprintable characters (e.g., BOM) and fix line endings.
-    clean_content = content.replace('\r\n', '\n').replace('\xEF\xBB\xBF', '')
+    # ``utf-8`` decodes the BOM to a single U+FEFF codepoint, so strip it
+    # as one character rather than its three-byte UTF-8 form.
+    clean_content = content.replace('\r\n', '\n').replace('\ufeff', '')
     # Remove blank lines with tabs.
     # See https://www.vasp.at/wiki/index.php/INCAR
-    clean_content = re.sub(r"^\t+$", "", clean_content)
+    clean_content = re.sub(r"^\t+$", "", clean_content, flags=re.MULTILINE)
 
     with open(file_path, 'w', encoding='utf-8') as file:
         file.write(clean_content)
