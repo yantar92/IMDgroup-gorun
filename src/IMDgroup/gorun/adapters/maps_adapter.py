@@ -134,7 +134,7 @@ class MapsAdapter:
         """
         return VaspAdapter().setup_commands(server_config)
 
-    def generate_run_commands(self, path: Path) -> str:
+    def generate_run_commands(self, path: Path, server_config: dict | None = None) -> str:
         """Return the maps+pollmach wrapper script.
 
         Exports ``GORUN_SKIP_SETUP=1`` so every child gorun process

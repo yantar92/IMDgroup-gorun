@@ -236,7 +236,7 @@ def dispatch_run(args, adapter: SoftwareAdapter) -> int:
         print(colored("GORUN_SKIP_SETUP is set.  Skipping environment setup.", "yellow"))
     else:
         setup = adapter.setup_commands(config[server])
-    body = adapter.generate_run_commands(cwd)
+    body = adapter.generate_run_commands(cwd, config[server])
 
     script_body = f"{setup}\n{_RUNNING_SETUP}\n{body}\n{_RUNNING_CLEANUP}\nexit 0"
 

@@ -253,17 +253,27 @@ class VaspAdapter:
         # Legacy flat config
         return server_config.get("VASP-setup", "")
 
-    def generate_run_commands(self, path: Path) -> str:
+    def generate_run_commands(self, path: Path, server_config: dict) -> str:
         if not self.no_incar_py and (path / "INCAR.py").is_file():
             return self._incar_py_script(path)
-        return self._direct_vasp_script()
+        return self._direct_vasp_script(server_config)
 
-    def _direct_vasp_script(self) -> str:
-        """Plain ``mpiexec vasp_<variant>`` invocation."""
+    def _direct_vasp_script(self, server_config: dict) -> str:
+        """``<mpiexec> vasp_<variant>`` invocation.
+
+        The launcher comes from ``server_config["mpiexec"]``,
+        defaulting to ``mpiexec`` (LUMI sets ``srun``).  The full
+        command is exported as ``VASP_COMMAND`` and then invoked,
+        mirroring the legacy gorun script.
+        """
         vasp_binary = os.path.join(
             os.environ["VASP_PATH"], "bin", f"vasp_{self.vasp_variant}"
         )
-        return f"${{VASP_COMMAND:-{vasp_binary}}}"
+        mpiexec = server_config.get("mpiexec", "mpiexec")
+        return (
+            f'export VASP_COMMAND="{mpiexec} {vasp_binary}"\n'
+            "$VASP_COMMAND"
+        )
 
     def _incar_py_script(self, path: Path) -> str:
         """ASE-wrapped script when INCAR.py is present."""

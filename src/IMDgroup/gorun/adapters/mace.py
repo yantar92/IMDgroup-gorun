@@ -683,7 +683,7 @@ class MaceMultiheadFinetuneAdapter(GpuAdapter):
     # Script generation
     # ------------------------------------------------------------------
 
-    def generate_run_commands(self, path: Path) -> str:
+    def generate_run_commands(self, path: Path, server_config: dict | None = None) -> str:
         """Return a two-stage bash body, or a RUNFILE if present.
 
         If ``RUNFILE.sh`` or ``RUNFILE.py`` exists in *path*, its

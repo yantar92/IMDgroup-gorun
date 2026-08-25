@@ -101,8 +101,13 @@ class SoftwareAdapter(Protocol):
         """
         ...
 
-    def generate_run_commands(self, path: Path) -> str:
+    def generate_run_commands(self, path: Path, server_config: dict) -> str:
         """Return the bash body that executes the computation.
+
+        *server_config* is the full server section from the TOML
+        config (e.g. ``config["lumi"]``), the same dict passed to
+        ``setup_commands``.  Adapters that need a launcher prefix
+        (e.g. ``mpiexec``/``srun`` for VASP) read it from here.
 
         The pipeline wraps this inside RUNNING-file management and
         (for Slurm) sbatch headers.

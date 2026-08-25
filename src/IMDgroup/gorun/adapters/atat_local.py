@@ -116,7 +116,7 @@ class AtatLocalAdapter:
         """
         return VaspAdapter().setup_commands(server_config)
 
-    def generate_run_commands(self, path: Path) -> str:
+    def generate_run_commands(self, path: Path, server_config: dict | None = None) -> str:
         """Return a Python heredoc calling ``run_atat_structure``.
 
         Produces::

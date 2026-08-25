@@ -156,7 +156,7 @@ class GpuAdapter:
     # Script generation
     # ------------------------------------------------------------------
 
-    def generate_run_commands(self, path: Path) -> str:
+    def generate_run_commands(self, path: Path, server_config: dict | None = None) -> str:
         """Return the RUNFILE command, or raise if none is found.
 
         When ``_script_name`` is set on the instance, that file is used

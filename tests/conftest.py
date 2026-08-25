@@ -53,8 +53,8 @@ class StubAdapter:
     def setup_commands(self, server_config) -> str:
         return self._record("setup_commands", server_config)
 
-    def generate_run_commands(self, path) -> str:
-        return self._record("generate_run_commands", path)
+    def generate_run_commands(self, path, server_config=None) -> str:
+        return self._record("generate_run_commands", path, server_config)
 
     def backup_excludes(self) -> list[str]:
         return self._record("backup_excludes")
