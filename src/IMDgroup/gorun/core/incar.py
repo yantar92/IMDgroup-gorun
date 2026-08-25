@@ -48,14 +48,14 @@ from termcolor import colored
 _INCAR_PATH = Path("INCAR.toml")
 
 
-def read_incar_toml() -> dict[str, object]:
-    """Read ``INCAR.toml`` and return all key-value pairs.
+def read_incar_toml(path: Path = _INCAR_PATH) -> dict[str, object]:
+    """Read *path* and return all key-value pairs.
 
     Returns an empty dict when the file does not exist.
     """
-    if not _INCAR_PATH.is_file():
+    if not path.is_file():
         return {}
-    with open(_INCAR_PATH, "rb") as fh:
+    with open(path, "rb") as fh:
         return tomllib.load(fh)
 
 
@@ -129,8 +129,9 @@ def write_incar_toml(
     raw_existing: dict[str, object] | None = None,
     defaults: dict[str, object] | None = None,
     always_include: set[str] | None = None,
+    path: Path = _INCAR_PATH,
 ) -> None:
-    """Write ``INCAR.toml`` with a sparse representation.
+    """Write ``INCAR.toml`` (at *path*) with a sparse representation.
 
     In *bootstrap* mode (no file exists yet), every adapter default
     is written so the user can see all available parameters.
@@ -146,7 +147,7 @@ def write_incar_toml(
 
     When the resulting content matches the file on disk, no write
     occurs.  When a write does occur, the existing file is backed up
-    to ``INCAR.toml.old``.
+    to ``INCAR.toml.old`` next to *path*.
 
     Parameters
     ----------
@@ -165,11 +166,14 @@ def write_incar_toml(
         Keys that must be written even when their value equals the
         default or is empty.  Used in bootstrap mode to surface
         required-but-unset parameters.
+    path:
+        Destination file.  Defaults to ``INCAR.toml`` in the current
+        working directory.
     """
     if raw_existing is None:
         raw_existing = {}
 
-    is_bootstrap = not _INCAR_PATH.is_file()
+    is_bootstrap = not path.is_file()
 
     # Build the merged dict for output.
     merged: dict[str, object] = {}
@@ -200,15 +204,15 @@ def write_incar_toml(
             return  # nothing changed
 
     # --- Write ---
-    if _INCAR_PATH.is_file():
-        backup = Path("INCAR.toml.old")
+    if path.is_file():
+        backup = path.with_name(f"{path.name}.old")
         if backup.is_file():
             backup.unlink()
-        shutil.copy2(_INCAR_PATH, backup)
-        print(colored("Backed up INCAR.toml → INCAR.toml.old", "yellow"))
+        shutil.copy2(path, backup)
+        print(colored(f"Backed up {path.name} → {backup.name}", "yellow"))
 
     lines = [f"{key} = {_toml_format_value(val)}" for key, val in merged.items()]
-    with open(_INCAR_PATH, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines) + "\n")
 
     label = "Bootstrapped" if is_bootstrap else "Updated"
@@ -222,8 +226,9 @@ def write_incar_toml_sections(
     raw_existing: dict[str, object] | None = None,
     defaults: dict[str, object] | None = None,
     always_include: set[str] | None = None,
+    path: Path = _INCAR_PATH,
 ) -> None:
-    """Write ``INCAR.toml`` with ``[section]`` grouping.
+    """Write ``INCAR.toml`` (at *path*) with ``[section]`` grouping.
 
     Like :func:`write_incar_toml` but *values* are grouped into TOML
     ``[section]`` tables based on *key_section*, which maps each
@@ -249,13 +254,16 @@ def write_incar_toml_sections(
         membership is resolved via *key_section*.
     always_include:
         Keys written even when matching defaults or empty.
+    path:
+        Destination file.  Defaults to ``INCAR.toml`` in the current
+        working directory.
     """
     if raw_existing is None:
         raw_existing = {}
 
     flat_raw = _flatten_toml(raw_existing)
 
-    is_bootstrap = not _INCAR_PATH.is_file()
+    is_bootstrap = not path.is_file()
 
     # Build the flattened merged dict (same logic as write_incar_toml).
     merged: dict[str, object] = {}
@@ -299,12 +307,12 @@ def write_incar_toml_sections(
             top_level[key] = val
 
     # --- Write ---
-    if _INCAR_PATH.is_file():
-        backup = Path("INCAR.toml.old")
+    if path.is_file():
+        backup = path.with_name(f"{path.name}.old")
         if backup.is_file():
             backup.unlink()
-        shutil.copy2(_INCAR_PATH, backup)
-        print(colored("Backed up INCAR.toml → INCAR.toml.old", "yellow"))
+        shutil.copy2(path, backup)
+        print(colored(f"Backed up {path.name} → {backup.name}", "yellow"))
 
     block: list[str] = []
     for key, val in top_level.items():
@@ -316,7 +324,7 @@ def write_incar_toml_sections(
         for key in sorted(sections[section_name]):
             block.append(f"{key} = {_toml_format_value(sections[section_name][key])}")
 
-    with open(_INCAR_PATH, "w", encoding="utf-8") as fh:
+    with open(path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(block) + "\n")
 
     label = "Bootstrapped" if is_bootstrap else "Updated"

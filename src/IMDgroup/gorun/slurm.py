@@ -34,6 +34,7 @@ import tempfile
 import re
 import glob
 import os
+import shutil
 import dateutil
 from pathlib import Path
 
@@ -44,10 +45,7 @@ def _executable_find(cmd: str) -> bool:
     """Return True when CMD executable is available.
     CMD is a string.
     """
-    try:
-        return bool(subprocess.check_output(['which', cmd]))
-    except subprocess.CalledProcessError:
-        return False
+    return shutil.which(cmd) is not None
 
 
 def barf_if_no_cmd(cmd: str) -> None:
@@ -104,6 +102,12 @@ def sbatch_script(shebang, args: dict[str, str], script: str) -> str:
 """
 
 
+_SBATCH_TEST_ONLY_RE = re.compile(
+    r"sbatch: Job [0-9]+ to start at ([^ ]+) "
+    r"using ([0-9]+) processors on nodes [^ ]+ in partition [^ ]+"
+)
+
+
 def sbatch_estimate_start(script: str):
     """Estimate waiting time until SCRIPT starts running.
     Return a tuple of (waiting_time, nproc), as (dateutil.timedelta,
@@ -138,8 +142,7 @@ def sbatch_estimate_start(script: str):
             print(e.output)
             print(f"Script:\n-----\n{script}\n-----\n")
             raise e
-    pattern = "sbatch: Job [0-9]+ to start at ([^ ]+) " +\
-        "using ([0-9]+) processors on nodes [^ ]+ in partition [^ ]+"
+    pattern = _SBATCH_TEST_ONLY_RE
     match = re.match(pattern, output)
     if match is None:
         return output

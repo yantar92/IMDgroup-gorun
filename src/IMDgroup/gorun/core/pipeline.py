@@ -86,6 +86,16 @@ def _next_run_folder(path: Path) -> str:
     return f"{_BACKUP_PREFIX}_{(last or 0) + 1}"
 
 
+def _rsync_exclude_args(excludes: list[str]) -> str:
+    """Build the rsync ``--exclude`` argument string.
+
+    ``gorun_*`` is always excluded first so previous backups are not
+    copied recursively; adapter-specific *excludes* follow.
+    """
+    all_excludes = ["gorun_*"] + list(excludes)
+    return " ".join(f"--exclude '{pat}'" for pat in all_excludes)
+
+
 def _backup_current_dir(path: Path, excludes: list[str]) -> None:
     """Backup *path* to the next *gorun_N* subdirectory.
 
@@ -113,8 +123,7 @@ def _backup_current_dir(path: Path, excludes: list[str]) -> None:
     # Always exclude gorun's own backup directories and tarballs
     # to avoid recursive backups.  Adapter-specific patterns
     # (e.g. WAVECAR) are appended on top.
-    all_excludes = ["gorun_*"] + list(excludes)
-    exclude_args = " ".join(f"--exclude '{pat}'" for pat in all_excludes)
+    exclude_args = _rsync_exclude_args(excludes)
     subprocess.check_call(
         f"rsync -avq {exclude_args} '{path}/' '{to}/'",
         shell=True,

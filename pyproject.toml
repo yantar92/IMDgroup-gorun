@@ -36,7 +36,10 @@ dependencies = [
 homepage = "https://www.oimalyi.org/"
 
 [project.optional-dependencies]
-dev = ["python-lsp-server[all]"]
+dev = [
+    "python-lsp-server[all]",
+    "pytest",
+]
 
 [project.scripts]
 gorun = "IMDgroup.gorun.gorun:main"
@@ -65,3 +68,12 @@ include = [
 
 [tool.pylint]
 source-roots=['./src']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+pythonpath = ["src"]
+markers = [
+    "integration: tests that shell out to external binaries",
+    "heavy: tests that import ase/pandas/pymatgen",
+]
