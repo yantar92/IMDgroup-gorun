@@ -794,21 +794,29 @@ class MaceMultiheadFinetuneAdapter(GpuAdapter):
 
         # --- SWA group ---
         flags: list[str] = []
-        if args.pop("swa", td["swa"]):
+        swa_enabled = args.pop("swa", td["swa"])
+        swa_lr = args.pop("swa_lr", td["swa_lr"])
+        start_swa = args.pop("start_swa", td["start_swa"])
+        swa_energy_weight = args.pop("swa_energy_weight", td["swa_energy_weight"])
+        swa_forces_weight = args.pop("swa_forces_weight", td["swa_forces_weight"])
+        swa_stress_weight = args.pop("swa_stress_weight", td["swa_stress_weight"])
+        if swa_enabled:
             flags.extend([
                 "  --swa \\\n",
-                f"  --swa_lr {args.pop('swa_lr', td['swa_lr'])} \\\n",
-                f"  --start_swa {args.pop('start_swa', td['start_swa'])} \\\n",
-                f"  --swa_energy_weight {args.pop('swa_energy_weight', td['swa_energy_weight'])} \\\n",
-                f"  --swa_forces_weight {args.pop('swa_forces_weight', td['swa_forces_weight'])} \\\n",
-                f"  --swa_stress_weight {args.pop('swa_stress_weight', td['swa_stress_weight'])} \\\n",
+                f"  --swa_lr {swa_lr} \\\n",
+                f"  --start_swa {start_swa} \\\n",
+                f"  --swa_energy_weight {swa_energy_weight} \\\n",
+                f"  --swa_forces_weight {swa_forces_weight} \\\n",
+                f"  --swa_stress_weight {swa_stress_weight} \\\n",
             ])
 
         # --- EMA group ---
-        if args.pop("ema", td["ema"]):
+        ema_enabled = args.pop("ema", td["ema"])
+        ema_decay = args.pop("ema_decay", td["ema_decay"])
+        if ema_enabled:
             flags.extend([
                 "  --ema \\\n",
-                f"  --ema_decay {args.pop('ema_decay', td['ema_decay'])} \\\n",
+                f"  --ema_decay {ema_decay} \\\n",
             ])
 
         # --- Remaining unknown args ---
