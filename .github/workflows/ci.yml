@@ -15,21 +15,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v9
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          enable-cache: true
           python-version: "3.12"
 
-      # `--locked` is omitted: IMDgroup-pymatgen is a git dependency
-      # that advances independently of this repo's uv.lock.
       - name: Install project and test dependencies
-        run: uv sync --extra test
+        run: pip install -e ".[test]"
 
       - name: Run unit tests
-        run: uv run pytest -m "not integration"
+        run: pytest -m "not integration"
 
   integration:
     name: Integration tests
@@ -39,16 +36,15 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v9
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          enable-cache: true
           python-version: "3.12"
 
       - name: Install project and test dependencies
-        run: uv sync --extra test
+        run: pip install -e ".[test]"
 
       - name: Run integration tests
-        run: uv run pytest -m integration
+        run: pytest -m integration
