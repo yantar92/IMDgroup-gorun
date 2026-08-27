@@ -69,6 +69,38 @@ Software-specific settings are namespaced under the server section.
 
 # Command Line Interface
 
+All subcommands (`vasp`, `mace-finetune`, `maps`, `atat-local`,
+`gpu`) accept a common set of flags in addition to their own options:
+
+-   **`--config PATH`:** Path to TOML configuration file (default:
+    `$IMDGroup/dist/etc/gorun.toml`).
+
+-   **`--queue NAME`:** Submit to a specific queue (default: let the
+    scheduler pick the one with the earliest finish time).
+
+-   **`--local`:** Run directly on the login node instead of submitting
+    via `sbatch`.
+
+-   **`--mark`:** Prepare the directory and create a `gorun_ready` marker
+    file, but do not submit.
+
+-   **`--force`:** Skip convergence checks.
+
+-   **`--keep FILE`:** Do not regenerate `FILE` if it already exists
+    (repeatable).
+
+-   **`--max-slurm-jobs N`:** Wait until the number of running Slurm jobs
+    drops below N before submitting (default: 0 = no limit).
+
+-   **`--dir DIR...`:** Run the pipeline in each `DIR` instead of the
+    current directory (one or more, space-separated).  gorun processes
+    each directory in turn within a single process, avoiding the
+    Python/import startup cost of invoking `gorun` once per directory on
+    slow filesystems (e.g. Lustre).  Missing directories are skipped with
+    a warning.  A directory that fails is reported and the run continues,
+    exiting non-zero at the end if any directory failed.  For `vasp`,
+    positional `NODES=/=TIME` must come before `--dir`.
+
 
 ## `gorun vasp`
 
@@ -101,7 +133,7 @@ arguments specify the number of nodes and the time limit:
 
 -   **`--mark`:** Prepare the directory and create a `gorun_ready` marker
     file, but do not submit. Use `gorun-all-ready.sh` to submit
-    multiple marked directories later (see [5](#org968d1d6)).
+    multiple marked directories later (see [5](#org5a6a0df)).
 
 -   **`--force`:** Skip convergence checks and run VASP even if the
     directory already contains converged output.
@@ -159,6 +191,9 @@ arguments specify the number of nodes and the time limit:
     
     # Keep existing POTCAR (and use --keep for POSCAR too)
     gorun vasp --keep POTCAR --keep POSCAR
+    
+    # Run the same submission in several directories in one process
+    gorun vasp --mark --keep POTCAR --dir run1 run2
 
 
 ### Job Preparation Pipeline
@@ -233,7 +268,7 @@ Both stages run sequentially in a single Slurm job.
 If a `RUNFILE.sh` or `RUNFILE.py` exists in the working directory, its
 content replaces the canned two-stage workflow.  `RUNFILE.sh` takes
 precedence over `RUNFILE.py`.  Both are wrapped so they inherit the
-cluster environment (see [3.2](#org846bf9f)).
+cluster environment (see [3.2](#org75f3e54)).
 
 Use this when the standard two-stage protocol does not fit your use
 case &ndash; for example, when you want to run `mace.cli.eval` or a custom
@@ -288,8 +323,9 @@ Almost all MACE training hyperparameters live in `INCAR.toml`:
 `loss`, `force_mh_ft_lr`, `device`, `default_dtype`, etc.
 
 When no `INCAR.toml` exists, `gorun mace-finetune` bootstraps a full
-template with every parameter at its default value.  You can then edit
-the file to adjust parameters.
+template with every parameter at its default value, then reports an
+error (exit code 1) because the required parameters are still unset.
+Edit the file and run again.
 
 **Precedence**: `--incar` overrides (highest) > explicit CLI flags >
 `INCAR.toml` values > hardcoded adapter defaults.  For example, with

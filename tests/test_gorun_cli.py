@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 import pytest
 
@@ -54,6 +55,18 @@ def test_parse_args_vasp_incar_flag() -> None:
     """The vasp --incar flag captures KEY:VAL items verbatim."""
     ns = gorun._parse_args(["vasp", "--incar", "ALGO:Normal", "NELM:200"])
     assert ns.incar == ["ALGO:Normal", "NELM:200"]
+
+
+def test_parse_args_dir_nargs_plus() -> None:
+    """--dir collects one or more directories from a single flag."""
+    ns = gorun._parse_args(["vasp", "--dir", "a", "b"])
+    assert ns.dir == ["a", "b"]
+
+
+def test_parse_args_dir_default_none() -> None:
+    """--dir defaults to None when not provided."""
+    ns = gorun._parse_args(["vasp"])
+    assert ns.dir is None
 
 
 # --- _make_vasp_adapter -----------------------------------------------------
@@ -171,6 +184,69 @@ def test_fill_namespace_defaults_atat_local_kpoints_placeholder() -> None:
     ns = argparse.Namespace(software="atat-local")
     gorun._fill_namespace_defaults(ns)
     assert ns.kpoints == ""
+
+
+# --- _dispatch_namespace ----------------------------------------------------
+
+
+def test_dispatch_namespace_multiple_dirs(monkeypatch, tmp_path) -> None:
+    """--dir dispatches once per directory, resolving relative paths."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    calls: list[Path] = []
+
+    def fake_dispatch_single(args, directory):
+        calls.append(directory)
+        return 0
+
+    monkeypatch.setattr(gorun, "_dispatch_single", fake_dispatch_single)
+    ns = gorun._parse_args(["vasp", "--dir", "a", "b"])
+    assert gorun._dispatch_namespace(ns) == 0
+    assert calls == [(tmp_path / "a").resolve(), (tmp_path / "b").resolve()]
+
+
+def test_dispatch_namespace_missing_dir_skips(monkeypatch, tmp_path) -> None:
+    """A non-existent --dir is skipped with a warning, not an error."""
+    monkeypatch.chdir(tmp_path)
+    calls: list[Path] = []
+    monkeypatch.setattr(
+        gorun, "_dispatch_single", lambda args, d: calls.append(d) or 0
+    )
+    ns = gorun._parse_args(["vasp", "--dir", "missing"])
+    assert gorun._dispatch_namespace(ns) == 0
+    assert calls == []
+
+
+def test_dispatch_namespace_continues_on_error(monkeypatch, tmp_path) -> None:
+    """A failing directory is reported and does not stop the loop."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    calls: list[Path] = []
+
+    def fake_dispatch_single(args, directory):
+        calls.append(directory)
+        if directory.name == "a":
+            raise ValueError("boom")
+        return 0
+
+    monkeypatch.setattr(gorun, "_dispatch_single", fake_dispatch_single)
+    ns = gorun._parse_args(["vasp", "--dir", "a", "b"])
+    assert gorun._dispatch_namespace(ns) == 1
+    assert calls == [(tmp_path / "a").resolve(), (tmp_path / "b").resolve()]
+
+
+def test_dispatch_namespace_single_dir_default(monkeypatch, tmp_path) -> None:
+    """Without --dir, dispatch runs once in the current directory."""
+    monkeypatch.chdir(tmp_path)
+    calls: list[Path] = []
+    monkeypatch.setattr(
+        gorun, "_dispatch_single", lambda args, d: calls.append(d) or 0
+    )
+    ns = gorun._parse_args(["vasp"])
+    assert gorun._dispatch_namespace(ns) == 0
+    assert calls == [tmp_path.resolve()]
 
 
 # --- run() ------------------------------------------------------------------

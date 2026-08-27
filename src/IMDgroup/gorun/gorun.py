@@ -31,13 +31,18 @@ Usage:
 
 For backward compatibility, plain ``gorun [OPTS] [NODES] [TIME-LIMIT]``
 is treated as ``gorun vasp``.
+
+All subcommands accept ``--dir DIR...`` (one or more) to run the
+pipeline in each listed directory instead of the current directory.
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import warnings
+from pathlib import Path
 
 from termcolor import colored
 
@@ -121,6 +126,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--keep", action="append", default=None,
         metavar="FILE",
         help="Do not regenerate FILE if it already exists (repeatable).",
+    )
+    shared.add_argument(
+        "--dir", nargs="+", default=None,
+        metavar="DIR",
+        help="Run in DIR instead of the current directory (one or more).",
     )
 
     ## vasp
@@ -518,11 +528,13 @@ def _fill_namespace_defaults(args: argparse.Namespace) -> argparse.Namespace:
     return args
 
 
-def _dispatch_namespace(args: argparse.Namespace) -> int:
-    """Build the adapter for *args* and run the dispatch pipeline."""
-    if not args.software:
-        _build_parser().print_help()
-        return 1
+def _dispatch_single(args: argparse.Namespace, directory: Path) -> int:
+    """Build the adapter and run the dispatch pipeline in *directory*.
+
+    The adapter is built after ``chdir`` because MACE reads ``INCAR.toml``
+    from the working directory.
+    """
+    os.chdir(directory)
 
     if args.software == "vasp":
         adapter = _make_vasp_adapter(args)
@@ -544,6 +556,64 @@ def _dispatch_namespace(args: argparse.Namespace) -> int:
         args.number_of_nodes = None
 
     return dispatch_run(args, adapter)
+
+
+def _run_directory(args: argparse.Namespace, directory: Path) -> int:
+    """Run the pipeline in *directory*, converting failures to exit codes.
+
+    Adapter constructors raise (e.g. MACE bootstrap) or call
+    ``sys.exit`` (invalid ``--incar``); both are caught here so a batch
+    run can continue to the next directory.
+    """
+    try:
+        return _dispatch_single(args, directory)
+    except SystemExit as exc:
+        code = exc.code
+        if code is None or code == 0:
+            return 0
+        if not isinstance(code, int):
+            code = 1
+        print(colored(f"Error in {directory}: exited with status {code}", "red"))
+        return code
+    except Exception as exc:  # noqa: BLE001 - report and continue
+        print(colored(f"Error in {directory}: {exc}", "red"))
+        return 1
+
+
+def _dispatch_namespace(args: argparse.Namespace) -> int:
+    """Build the adapter for *args* and run the dispatch pipeline.
+
+    When ``--dir`` is given, the pipeline runs once per directory;
+    otherwise it runs once in the current directory.  Failures do not
+    stop the loop; they are reported and the process exits non-zero if
+    any directory failed.
+    """
+    if not args.software:
+        _build_parser().print_help()
+        return 1
+
+    directories = args.dir
+    if not directories:
+        return _run_directory(args, Path.cwd())
+
+    base_dir = Path.cwd()
+    exit_code = 0
+    error_count = 0
+    for directory in directories:
+        target = (base_dir / directory).resolve()
+        if not target.is_dir():
+            print(colored(f"Skipping missing directory: {target}", "yellow"))
+            continue
+        print(colored(f"Running gorun in {target}", "cyan"))
+        result = _run_directory(args, target)
+        if result != 0:
+            error_count += 1
+            if exit_code == 0:
+                exit_code = result
+
+    if error_count:
+        print(colored(f"Errors occurred in {error_count} directories", "red"))
+    return exit_code
 
 
 # ---------------------------------------------------------------------------

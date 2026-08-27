@@ -69,7 +69,6 @@ are shared — gorun passes them to both stages.
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 import pandas as pd
@@ -307,8 +306,8 @@ class MaceMultiheadFinetuneAdapter(GpuAdapter):
         to ``run_train``.  Values are strings from the CLI.
 
         When INCAR.toml does not exist and no CLI args provide the
-        required parameters, a reference INCAR.toml is written and
-        the process exits.
+        required parameters, a reference INCAR.toml is written and a
+        ``ValueError`` is raised instructing the user to edit it.
         """
         raw_toml = read_incar_toml()
         if incar_overrides is None:
@@ -452,12 +451,10 @@ class MaceMultiheadFinetuneAdapter(GpuAdapter):
                     defaults=self.DEFAULTS,
                     always_include=self.REQUIRED,
                 )
-                print(colored(
-                    "Edit INCAR.toml to set the required parameters: "
-                    + ", ".join(missing_required),
-                    "cyan",
-                ))
-                sys.exit(0)
+                raise ValueError(
+                    "Wrote INCAR.toml with defaults.  Edit it to set the "
+                    "required parameters: " + ", ".join(missing_required)
+                )
 
         self.validate()
 

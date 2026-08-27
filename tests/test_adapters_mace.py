@@ -178,8 +178,8 @@ def test_constructor_incar_overrides_section_routing(monkeypatch) -> None:
     assert adapter._train_args["batch_size"] == "12"
 
 
-def test_constructor_bootstrap_exits(monkeypatch) -> None:
-    """No TOML and no CLI input writes a reference and exits 0."""
+def test_constructor_bootstrap_raises(monkeypatch) -> None:
+    """No TOML and no CLI input writes a reference and raises ValueError."""
     monkeypatch.setattr(mace_mod, "read_incar_toml", lambda: {})
     writes = []
     monkeypatch.setattr(
@@ -187,9 +187,8 @@ def test_constructor_bootstrap_exits(monkeypatch) -> None:
         "write_incar_toml_sections",
         lambda *args, **kwargs: writes.append(args),
     )
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(ValueError):
         MaceMultiheadFinetuneAdapter()
-    assert exc.value.code == 0
     assert len(writes) == 1
 
 

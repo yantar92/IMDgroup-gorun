@@ -71,6 +71,26 @@ def test_vasp_local_runs_fake_binary(fake_cluster, tmp_path: Path, monkeypatch) 
     assert "vasp vasp_ncl" in fake_cluster.log.read_text()
 
 
+def test_vasp_mark_multiple_dirs(fake_cluster, tmp_path: Path, monkeypatch) -> None:
+    """--dir runs the full mark pipeline once per directory."""
+    monkeypatch.chdir(tmp_path)
+    for name in ("d1", "d2"):
+        d = tmp_path / name
+        d.mkdir()
+        _copy_vasp_inputs(d)
+
+    rc = gorun_main(
+        ["vasp", "--mark", "--keep", "POTCAR", "--config", CONFIG,
+         "--dir", "d1", "--dir", "d2"]
+    )
+
+    assert rc == 0
+    assert (tmp_path / "d1" / "gorun_ready").exists()
+    assert (tmp_path / "d2" / "gorun_ready").exists()
+    assert (tmp_path / "d1" / "sub").exists()
+    assert (tmp_path / "d2" / "sub").exists()
+
+
 def test_vasp_already_converged_exits(fake_cluster, converged_vasp_dir, monkeypatch) -> None:
     """README convergence check: a converged directory exits without re-running."""
     monkeypatch.chdir(converged_vasp_dir)
