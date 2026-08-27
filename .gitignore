@@ -1,2 +1,12 @@
 /.venv/
 /src/IMDgroup_gorun.egg-info/
+
+# Python build artifacts
+/build/
+
+# Byte-compiled caches
+__pycache__/
+*.py[cod]
+
+# uv lockfile: this project is installed via pip, not uv
+uv.lock
