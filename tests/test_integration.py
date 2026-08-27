@@ -81,7 +81,7 @@ def test_vasp_mark_multiple_dirs(fake_cluster, tmp_path: Path, monkeypatch) -> N
 
     rc = gorun_main(
         ["vasp", "--mark", "--keep", "POTCAR", "--config", CONFIG,
-         "--dir", "d1", "--dir", "d2"]
+         "--dir", "d1", "d2"]
     )
 
     assert rc == 0
@@ -155,13 +155,12 @@ def test_mace_mark_with_split(fake_cluster, tmp_path: Path, monkeypatch) -> None
 
 
 def test_mace_bootstrap(fake_cluster, tmp_path: Path, monkeypatch) -> None:
-    """README: first run in an empty dir bootstraps INCAR.toml and exits 0."""
+    """README: first run in an empty dir bootstraps INCAR.toml and exits 1."""
     monkeypatch.chdir(tmp_path)
 
-    with pytest.raises(SystemExit) as exc:
-        gorun_main(["mace-finetune"])
+    rc = gorun_main(["mace-finetune"])
 
-    assert exc.value.code == 0
+    assert rc == 1
     assert (tmp_path / "INCAR.toml").exists()
 
 
