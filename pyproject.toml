@@ -29,7 +29,7 @@ dependencies = [
     "python-dateutil",
     "scikit-learn",
     "termcolor",
-    "IMDgroup-pymatgen",
+    "IMDgroup-pymatgen @ git+https://github.com/yantar92/IMDgroup-pymatgen.git",
 ]
 
 [project.urls]
@@ -38,6 +38,8 @@ homepage = "https://www.oimalyi.org/"
 [project.optional-dependencies]
 dev = [
     "python-lsp-server[all]",
+]
+test = [
     "pytest",
 ]
 
@@ -47,9 +49,6 @@ gorun-mace = "IMDgroup.gorun.gorun:main_mace"
 gorun-mace-finetune = "IMDgroup.gorun.gorun:main_mace"
 gorun-atat-local = "IMDgroup.gorun.gorun_atat_local:main"
 gorun-maps = "IMDgroup.gorun.gorun_maps:main"
-
-[tool.uv.sources]
-IMDgroup-pymatgen = { path = "../IMDgroup-pymatgen" }
 
 [tool.setuptools]
 script-files = ["scripts/gorun-all-ready.sh"]
