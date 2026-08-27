@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Integration tests run at most once per day.
+    - cron: "17 3 * * *"
+
+jobs:
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      # `--locked` is omitted: IMDgroup-pymatgen is a git dependency
+      # that advances independently of this repo's uv.lock.
+      - name: Install project and test dependencies
+        run: uv sync --extra test
+
+      - name: Run unit tests
+        run: uv run pytest -m "not integration"
+
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    # Only on the daily schedule or a manual dispatch; not on every
+    # push or pull request, so they run at most once per day.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install project and test dependencies
+        run: uv sync --extra test
+
+      - name: Run integration tests
+        run: uv run pytest -m integration
