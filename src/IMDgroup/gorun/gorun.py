@@ -98,6 +98,10 @@ def _build_parser() -> argparse.ArgumentParser:
     ## shared flags (parent parser reused by all subcommands)
     shared = argparse.ArgumentParser(add_help=False)
     shared.add_argument(
+        "--debug", action="store_true",
+        help="Print the full traceback instead of a one-line error message.",
+    )
+    shared.add_argument(
         "--force", action="store_true",
         help="Force running even if already converged or queued.",
     )
@@ -563,8 +567,12 @@ def _run_directory(args: argparse.Namespace, directory: Path) -> int:
 
     Adapter constructors raise (e.g. MACE bootstrap) or call
     ``sys.exit`` (invalid ``--incar``); both are caught here so a batch
-    run can continue to the next directory.
+    run can continue to the next directory.  With ``--debug`` the
+    exceptions propagate so Python prints the full traceback instead of
+    a one-line error message.
     """
+    if getattr(args, "debug", False):
+        return _dispatch_single(args, directory)
     try:
         return _dispatch_single(args, directory)
     except SystemExit as exc:

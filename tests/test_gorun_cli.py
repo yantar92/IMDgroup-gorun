@@ -69,6 +69,12 @@ def test_parse_args_dir_default_none() -> None:
     assert ns.dir is None
 
 
+def test_parse_args_debug_flag() -> None:
+    """--debug is accepted and defaults to False."""
+    assert gorun._parse_args(["vasp"]).debug is False
+    assert gorun._parse_args(["vasp", "--debug"]).debug is True
+
+
 # --- _make_vasp_adapter -----------------------------------------------------
 
 
@@ -247,6 +253,27 @@ def test_dispatch_namespace_single_dir_default(monkeypatch, tmp_path) -> None:
     ns = gorun._parse_args(["vasp"])
     assert gorun._dispatch_namespace(ns) == 0
     assert calls == [tmp_path.resolve()]
+
+
+def test_run_directory_debug_reraises(monkeypatch, tmp_path) -> None:
+    """--debug lets the underlying exception propagate with its traceback."""
+    def fake_dispatch_single(args, directory):
+        raise ValueError("boom")
+
+    monkeypatch.setattr(gorun, "_dispatch_single", fake_dispatch_single)
+    ns = gorun._parse_args(["vasp", "--debug"])
+    with pytest.raises(ValueError, match="boom"):
+        gorun._run_directory(ns, tmp_path)
+
+
+def test_run_directory_swallows_by_default(monkeypatch, tmp_path) -> None:
+    """Without --debug an exception is reported and converted to exit code 1."""
+    def fake_dispatch_single(args, directory):
+        raise ValueError("boom")
+
+    monkeypatch.setattr(gorun, "_dispatch_single", fake_dispatch_single)
+    ns = gorun._parse_args(["vasp"])
+    assert gorun._run_directory(ns, tmp_path) == 1
 
 
 # --- run() ------------------------------------------------------------------
