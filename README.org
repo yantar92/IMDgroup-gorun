@@ -97,22 +97,21 @@ All subcommands (~vasp~, ~mace-finetune~, ~maps~, ~atat-local~,
   Python/import startup cost of invoking =gorun= once per directory on
   slow filesystems (e.g. Lustre).  Missing directories are skipped with
   a warning.  A directory that fails is reported and the run continues,
-  exiting non-zero at the end if any directory failed.  For =vasp=,
-  positional =NODES=/=TIME= must come before =--dir=.
+  exiting non-zero at the end if any directory failed.
 
 ** ~gorun vasp~
 
 Submit a VASP job from the current directory.  The plain ~gorun~
-command (without subcommand) is treated as ~gorun vasp~.  Positional
-arguments specify the number of nodes and the time limit:
+command (without subcommand) is treated as ~gorun vasp~.  =--nodes=
+and =--time-limit= specify the number of nodes and the time limit:
 
 #+begin_src bash
   # Submit job requesting 2 nodes for 24 hours
-  gorun vasp 2 24:00:00
+  gorun vasp --nodes 2 --time-limit 24:00:00
   # Shorthand:
-  gorun 2 24:00:00
+  gorun --nodes 2 --time-limit 24:00:00
 
-  # Use default nodes/time from config (positional args optional)
+  # Use default nodes/time from config (flags optional)
   gorun vasp
 #+end_src
 
@@ -161,33 +160,35 @@ arguments specify the number of nodes and the time limit:
 - =--max_slurm_jobs N= :: Wait until the number of running Slurm jobs
   drops below N before submitting (default: 0 = no limit).
 
-- =NODES=, =TIME= :: Positional arguments: number of nodes and time
-  limit in =hh:mm:ss= format. Both are optional; defaults come from
-  the config file.
+- =--nodes N= :: Number of nodes to request (optional; defaults come
+  from config).
+
+- =--time-limit HH:MM:SS= :: Time limit (optional; defaults come from
+  config).
 
 *** Examples
 
 #+begin_src bash
   # Submit to a specific GPU queue with 8 nodes for 48 hours
-  gorun vasp --queue plgrid-gpu-a100 8 48:00:00
+  gorun vasp --queue plgrid-gpu-a100 --nodes 8 --time-limit 48:00:00
 
   # Use gamma-point-only VASP binary, 1 node, 1 hour
-  gorun vasp --vasp gam 1 1:00:00
+  gorun vasp --vasp gam --nodes 1 --time-limit 1:00:00
 
   # Run locally (no sbatch) for quick testing
-  gorun vasp --local 1 0:30:00
+  gorun vasp --local --nodes 1 --time-limit 0:30:00
 
   # Prepare directory for later batch submission
-  gorun vasp --mark 4 24:00:00
+  gorun vasp --mark --nodes 4 --time-limit 24:00:00
 
   # Override INCAR settings before submission
-  gorun vasp --incar ISIF:3 NSW:100 2 24:00:00
+  gorun vasp --incar ISIF:3 NSW:100 --nodes 2 --time-limit 24:00:00
 
   # Force re-run even if already converged
-  gorun vasp --force 2 24:00:00
+  gorun vasp --force --nodes 2 --time-limit 24:00:00
 
   # Limit concurrent jobs to 20
-  gorun vasp --max-slurm-jobs 20 2 24:00:00
+  gorun vasp --max-slurm-jobs 20 --nodes 2 --time-limit 24:00:00
 
   # Keep existing POTCAR (and use --keep for POSCAR too)
   gorun vasp --keep POTCAR --keep POSCAR
@@ -402,7 +403,7 @@ rate and number of epochs without editing =INCAR.toml=:
   (repeatable).  Useful values: =train.xyz=, =val.xyz=,
   =heads.json=.
 
-- =--time_limit HH:MM:SS= :: Time limit (optional; defaults come
+- =--time-limit HH:MM:SS= :: Time limit (optional; defaults come
   from config).
 
 - =--queue NAME= :: Submit to a specific queue (default:
@@ -460,7 +461,7 @@ Before submission, ~gorun mace-finetune~ runs the following steps:
       --replay-xyz replay.xyz \
       --data-path result.pkl \
       --no-fine-tuning-select \
-      48:00:00
+      --time-limit 48:00:00
 
   # Keep existing xyz files, override training params via --incar
   gorun mace-finetune \
@@ -479,7 +480,7 @@ Before submission, ~gorun mace-finetune~ runs the following steps:
       --mark
 
   # Use INCAR.toml for almost all parameters
-  gorun mace-finetune 48:00:00
+  gorun mace-finetune --time-limit 48:00:00
   # (model_path, replay_xyz, data_path, e0s, etc. read from INCAR.toml)
 
   # INCAR.toml provides defaults; override batch size from CLI
@@ -532,26 +533,26 @@ automatically.
   =RUNFILE.py=.  =.py= files are run with =python -u=; everything
   else (including =.sh=) with =bash=.
 
-- =TIME= :: Positional argument: time limit in =hh:mm:ss= format
-  (optional; defaults come from the config).
+- =--time-limit HH:MM:SS= :: Time limit (optional; defaults come
+  from the config).
 
 *** Examples
 
 #+begin_src bash
   # Use the default RUNFILE.sh in the current directory
-  gorun gpu 48:00:00
+  gorun gpu --time-limit 48:00:00
 
   # Use a custom script
-  gorun gpu --script-name train.py 24:00:00
+  gorun gpu --script-name train.py --time-limit 24:00:00
 
   # Run locally for testing
   gorun gpu --local
 
   # Prepare directory for later batch submission
-  gorun gpu --mark 48:00:00
+  gorun gpu --mark --time-limit 48:00:00
 
   # Submit to a specific queue
-  gorun gpu --queue plgrid-gpu-a100 24:00:00
+  gorun gpu --queue plgrid-gpu-a100 --time-limit 24:00:00
 
   # Custom script + keep marker
   gorun gpu --script-name eval.sh --mark
@@ -580,7 +581,10 @@ Launches ~maps~ on the compute node and configures it to use
 - =--sublattice_cutoff DIST= :: Mark a structure as error if its
   sublattice deviation exceeds this value (default: off).
 
-- =--time_limit HH:MM:SS= :: Time limit for the =maps= parent job
+- =--nodes N= :: Number of nodes for the =maps= parent job
+  (default: =1=).
+
+- =--time-limit HH:MM:SS= :: Time limit for the =maps= parent job
   (optional).
 
 - =--queue NAME= :: Submit to a specific queue (default: auto-select

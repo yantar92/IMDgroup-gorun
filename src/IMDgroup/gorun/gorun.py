@@ -25,11 +25,11 @@
 """Slurm job submission for VASP, MACE, and other backends.
 
 Usage:
-    gorun vasp [OPTS] [NODES] [TIME-LIMIT]
-    gorun mace [OPTS] [TIME-LIMIT]
-    gorun gpu [OPTS] [TIME-LIMIT]
+    gorun vasp [OPTS] [--nodes N] [--time-limit HH:MM:SS]
+    gorun mace [OPTS] [--time-limit HH:MM:SS]
+    gorun gpu [OPTS] [--time-limit HH:MM:SS]
 
-For backward compatibility, plain ``gorun [OPTS] [NODES] [TIME-LIMIT]``
+For backward compatibility, plain ``gorun [OPTS] [--nodes N] [--time-limit HH:MM:SS]``
 is treated as ``gorun vasp``.
 
 All subcommands accept ``--dir DIR...`` (one or more) to run the
@@ -145,11 +145,13 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Queue a VASP run from the current directory.",
     )
     vasp_parser.add_argument(
-        "number_of_nodes", nargs="?", default=None,
+        "--nodes", dest="number_of_nodes", default=None,
+        metavar="N",
         help="Number of nodes to request (optional; defaults come from config).",
     )
     vasp_parser.add_argument(
-        "time_limit", nargs="?", default=None,
+        "--time-limit", dest="time_limit", default=None,
+        metavar="HH:MM:SS",
         help="Time limit in HH:MM:SS (optional; defaults come from config).",
     )
     vasp_parser.add_argument(
@@ -207,7 +209,8 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     mace_parser.add_argument(
-        "time_limit", nargs="?", default=None,
+        "--time-limit", dest="time_limit", default=None,
+        metavar="HH:MM:SS",
         help="Time limit in HH:MM:SS (optional; defaults come from config).",
     )
     ## Required
@@ -285,11 +288,13 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Queue an ATAT maps run from the current directory.",
     )
     maps_parser.add_argument(
-        "number_of_nodes", nargs="?", default=None,
+        "--nodes", dest="number_of_nodes", default=None,
+        metavar="N",
         help="Number of nodes (default: 1).",
     )
     maps_parser.add_argument(
-        "time_limit", nargs="?", default=None,
+        "--time-limit", dest="time_limit", default=None,
+        metavar="HH:MM:SS",
         help="Time limit in HH:MM:SS (optional).",
     )
     maps_parser.add_argument(
@@ -361,7 +366,8 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     gpu_parser.add_argument(
-        "time_limit", nargs="?", default=None,
+        "--time-limit", dest="time_limit", default=None,
+        metavar="HH:MM:SS",
         help="Time limit in HH:MM:SS (optional; defaults come from config).",
     )
     gpu_parser.add_argument(

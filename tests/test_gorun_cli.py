@@ -36,12 +36,26 @@ def test_parse_args_plain_gorun_falls_back_to_vasp() -> None:
     assert ns.software == "vasp"
 
 
-def test_parse_args_plain_positionals_route_to_vasp() -> None:
-    """Positional nodes/time without a subcommand parse as vasp args."""
-    ns = gorun._parse_args(["2", "01:00:00"])
+def test_parse_args_plain_flags_route_to_vasp() -> None:
+    """Nodes/time flags without a subcommand parse as vasp args."""
+    ns = gorun._parse_args(["--nodes", "2", "--time-limit", "01:00:00"])
     assert ns.software == "vasp"
     assert ns.number_of_nodes == "2"
     assert ns.time_limit == "01:00:00"
+
+
+def test_parse_args_plain_positionals_rejected() -> None:
+    """Positional nodes/time are no longer accepted (breaking change)."""
+    with pytest.raises(SystemExit) as exc:
+        gorun._parse_args(["2", "01:00:00"])
+    assert exc.value.code == 2
+
+
+def test_parse_args_vasp_nodes_time_flags() -> None:
+    """The vasp subcommand accepts --nodes and --time-limit as flags."""
+    ns = gorun._parse_args(["vasp", "--nodes", "4", "--time-limit", "48:00:00"])
+    assert ns.number_of_nodes == "4"
+    assert ns.time_limit == "48:00:00"
 
 
 def test_parse_args_help_without_subcommand_shows_top_level() -> None:
