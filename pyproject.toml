@@ -37,7 +37,7 @@ homepage = "https://www.oimalyi.org/"
 
 [project.optional-dependencies]
 dev = [
-    "python-lsp-server[all]",
+    "pyright[all]",
 ]
 test = [
     "pytest",
