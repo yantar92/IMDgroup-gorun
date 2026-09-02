@@ -618,7 +618,7 @@ def _dispatch_namespace(args: argparse.Namespace) -> int:
         if not target.is_dir():
             print(colored(f"Skipping missing directory: {target}", "yellow"))
             continue
-        print(colored(f"Running gorun in {target}", "cyan"))
+        print(colored(f"Running gorun in {directory}", "cyan"))
         result = _run_directory(args, target)
         if result != 0:
             error_count += 1
