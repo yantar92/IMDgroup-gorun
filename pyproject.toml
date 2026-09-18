@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "IMDgroup-gorun"
-version = "0.1.0"
+version = "2.1.0"
 description = "Slurm job submission helpers for Inverse Materials Design group"
 authors = [ {name = "Ihor Radchenko", email = "yantar92@posteo.net"},
 	    {name = "Oleksandr I. Malyi", email = "oleksandrmalyi@gmail.com"}]
