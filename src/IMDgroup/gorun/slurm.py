@@ -145,7 +145,11 @@ def sbatch_estimate_start(script: str):
     pattern = _SBATCH_TEST_ONLY_RE
     match = re.match(pattern, output)
     if match is None:
-        return output
+        raise RuntimeError(
+            "Unexpected sbatch --test-only output:\n"
+            f"-----\n{output}\n-----\n"
+            f"Script:\n-----\n{script}\n-----\n"
+        )
     scheduled_time_str = match.group(1)
     ncpus = int(match.group(2))
     scheduled_time = dateutil.parser.isoparse(scheduled_time_str)

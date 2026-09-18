@@ -175,6 +175,21 @@ def test_sbatch_estimate_start_unavailable_node_config(monkeypatch, tmp_path: Pa
     assert sbatch_estimate_start("x") is None
 
 
+def test_sbatch_estimate_start_unexpected_output_raises(monkeypatch, tmp_path: Path) -> None:
+    """Unrecognized --test-only output raises RuntimeError instead of leaking it."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(slurm_mod, "barf_if_no_cmd", lambda cmd: None)
+
+    def fake(cmd, **kwargs):
+        if cmd.startswith("sbatch --test-only"):
+            return b"some unexpected output"
+        raise AssertionError(cmd)
+
+    monkeypatch.setattr(slurm_mod.subprocess, "check_output", fake)
+    with pytest.raises(RuntimeError):
+        sbatch_estimate_start("x")
+
+
 # --- get_best_script --------------------------------------------------------
 
 
