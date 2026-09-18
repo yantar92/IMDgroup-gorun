@@ -127,6 +127,27 @@ def test_sbatch_estimate_start_success(monkeypatch, tmp_path: Path) -> None:
     assert wait == timedelta(hours=1)
 
 
+def test_sbatch_estimate_start_timezone_suffix(monkeypatch, tmp_path: Path) -> None:
+    """A trailing token after the timestamp (e.g. timezone) is tolerated."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(slurm_mod, "barf_if_no_cmd", lambda cmd: None)
+
+    def fake(cmd, **kwargs):
+        if cmd.startswith("sbatch --test-only"):
+            return (
+                b"sbatch: Job 123 to start at 2026-09-30T13:14:31 a "
+                b"using 8 processors on nodes nid005076 in partition small-g"
+            )
+        if cmd.startswith("date"):
+            return b"2026-09-30T13:14:31"
+        raise AssertionError(cmd)
+
+    monkeypatch.setattr(slurm_mod.subprocess, "check_output", fake)
+    wait, cpus = sbatch_estimate_start("#!/bin/bash\necho hi\n")
+    assert cpus == 8
+    assert wait == timedelta(0)
+
+
 def test_sbatch_estimate_start_bad_account(monkeypatch, tmp_path: Path) -> None:
     """An invalid account error returns None."""
     monkeypatch.chdir(tmp_path)

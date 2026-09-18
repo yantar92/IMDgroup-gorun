@@ -103,7 +103,8 @@ def sbatch_script(shebang, args: dict[str, str], script: str) -> str:
 
 
 _SBATCH_TEST_ONLY_RE = re.compile(
-    r"sbatch: Job [0-9]+ to start at ([^ ]+) "
+    r"sbatch: Job [0-9]+ to start at "
+    r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}).*?"
     r"using ([0-9]+) processors on nodes [^ ]+ in partition [^ ]+"
 )
 
