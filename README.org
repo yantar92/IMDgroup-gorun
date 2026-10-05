@@ -214,7 +214,10 @@ Before submission, ~gorun~ runs the following steps in order:
 5. Input sanitization :: Cleans =INCAR=, =POSCAR=, =KPOINTS=
    (newlines, BOMs, blank lines).
 6. POTCAR generation :: Generates =POTCAR= from =POSCAR= using ASE
-   with VASP-recommended pseudopotentials (PBE functional).  Skips if
+   with VASP-recommended pseudopotentials (PBE functional).  A
+   =[POTCAR]= section in =INCAR.toml= can override individual elements
+   using pymatgen-style full potential names (e.g. =W = "W_sv"=),
+   which is useful for non-standard pseudopotentials.  Skips if
    =--keep_potcar= is set.
 7. vdW kernel :: Copies =vdw_kernel.bindat= from =$VASP_PATH= if the
    INCAR requests vdW corrections.

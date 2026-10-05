@@ -132,7 +132,7 @@ and `--time-limit` specify the number of nodes and the time limit:
 
 -   **`--mark`:** Prepare the directory and create a `gorun_ready` marker
     file, but do not submit. Use `gorun-all-ready.sh` to submit
-    multiple marked directories later (see [5](#org5a6a0df)).
+    multiple marked directories later (see [5](#org915b15e)).
 
 -   **`--force`:** Skip convergence checks and run VASP even if the
     directory already contains converged output.
@@ -163,8 +163,8 @@ and `--time-limit` specify the number of nodes and the time limit:
 -   **`--nodes N`:** Number of nodes to request (optional; defaults come
     from config).
 
--   **`--time-limit HH:MM:SS`:** Time limit (optional; defaults come
-    from config).
+-   **`--time-limit HH:MM:SS`:** Time limit (optional; defaults come from
+    config).
 
 
 ### Examples
@@ -214,7 +214,10 @@ Before submission, `gorun` runs the following steps in order:
 5.  Input sanitization :: Cleans `INCAR`, `POSCAR`, `KPOINTS`
     (newlines, BOMs, blank lines).
 6.  POTCAR generation :: Generates `POTCAR` from `POSCAR` using ASE
-    with VASP-recommended pseudopotentials (PBE functional).  Skips if
+    with VASP-recommended pseudopotentials (PBE functional).  A
+    `[POTCAR]` section in `INCAR.toml` can override individual elements
+    using pymatgen-style full potential names (e.g. `W = "W_sv"`),
+    which is useful for non-standard pseudopotentials.  Skips if
     `--keep_potcar` is set.
 7.  vdW kernel :: Copies `vdw_kernel.bindat` from `$VASP_PATH` if the
     INCAR requests vdW corrections.
@@ -269,7 +272,7 @@ Both stages run sequentially in a single Slurm job.
 If a `RUNFILE.sh` or `RUNFILE.py` exists in the working directory, its
 content replaces the canned two-stage workflow.  `RUNFILE.sh` takes
 precedence over `RUNFILE.py`.  Both are wrapped so they inherit the
-cluster environment (see [3.2](#org75f3e54)).
+cluster environment (see [3.2](#orga1db24e)).
 
 Use this when the standard two-stage protocol does not fit your use
 case &ndash; for example, when you want to run `mace.cli.eval` or a custom

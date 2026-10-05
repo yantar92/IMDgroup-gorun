@@ -19,6 +19,7 @@ from IMDgroup.gorun.cleanVASP import (
     directory_contains_vasp_outputp,
     mdp,
     nebp,
+    potcar_setups,
 )
 
 
@@ -170,3 +171,52 @@ def test_check_incar_unknown_tag_warns(tmp_path: Path) -> None:
     (tmp_path / "INCAR").write_text("FOOBAR = 1\n")
     with pytest.warns(BadIncarWarning):
         check_incar(str(tmp_path))
+
+
+# --- potcar_setups ----------------------------------------------------------
+
+
+def test_potcar_setups_defaults(tmp_path: Path) -> None:
+    """Without INCAR.toml, the recommended defaults are returned."""
+    setups = potcar_setups(str(tmp_path))
+    assert setups["base"] == "recommended"
+    assert setups["W"] == "_sv"
+
+
+def test_potcar_setups_from_toml(tmp_path: Path) -> None:
+    """[POTCAR] overrides map full names to ASE suffixes."""
+    (tmp_path / "INCAR.toml").write_text(
+        '[POTCAR]\nW = "W_sv"\nLi = "Li_sv"\nC = "C"\n'
+    )
+    setups = potcar_setups(str(tmp_path))
+    assert setups["W"] == "_sv"
+    assert setups["Li"] == "_sv"
+    assert setups["C"] == ""
+
+
+def test_potcar_setups_override_default_w(tmp_path: Path) -> None:
+    """A user override for W wins over the built-in fix."""
+    (tmp_path / "INCAR.toml").write_text('[POTCAR]\nW = "W_pv"\n')
+    setups = potcar_setups(str(tmp_path))
+    assert setups["W"] == "_pv"
+
+
+def test_potcar_setups_non_table_raises(tmp_path: Path) -> None:
+    """A non-table POTCAR value raises ValueError."""
+    (tmp_path / "INCAR.toml").write_text('POTCAR = "W_sv"\n')
+    with pytest.raises(ValueError):
+        potcar_setups(str(tmp_path))
+
+
+def test_potcar_setups_bad_prefix_raises(tmp_path: Path) -> None:
+    """A value that is not a valid potential name raises ValueError."""
+    (tmp_path / "INCAR.toml").write_text('[POTCAR]\nW = "Wv_sv"\n')
+    with pytest.raises(ValueError):
+        potcar_setups(str(tmp_path))
+
+
+def test_potcar_setups_wrong_element_raises(tmp_path: Path) -> None:
+    """A value not starting with the element symbol raises ValueError."""
+    (tmp_path / "INCAR.toml").write_text('[POTCAR]\nW = "Li_sv"\n')
+    with pytest.raises(ValueError):
+        potcar_setups(str(tmp_path))

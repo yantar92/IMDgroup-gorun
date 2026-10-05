@@ -38,6 +38,7 @@ from ase.calculators.vasp import Vasp
 from pymatgen.io.vasp.inputs import Incar
 from pymatgen.io.vasp.outputs import Potcar
 from IMDgroup.pymatgen.io.vasp.vaspdir import IMDGVaspDir
+from IMDgroup.gorun.core.incar import read_incar_toml
 from xml.etree.ElementTree import ParseError
 
 
@@ -175,6 +176,69 @@ def clean_vasp_inputs(path='.') -> None:
             clean_vasp_input(os.path.join(path, file))
 
 
+def potcar_setups(path='.') -> dict[str, str]:
+    """Return ASE ``setups`` dict for POTCAR generation in PATH.
+
+    The dict starts from the VASP-recommended pseudopotentials (with a
+    fix that maps W to ``_sv``, matching VASP's recommendation rather
+    than ASE's ``_pv``) and is overridden by any entries in the
+    ``[POTCAR]`` section of ``INCAR.toml`` in PATH.
+
+    ``INCAR.toml`` POTCAR entries use the same convention as pymatgen
+    input sets (see ``IMDgroup.pymatgen`` ``sets.py``): keys are
+    element symbols and values are full POTCAR names, e.g.::
+
+        [POTCAR]
+        W = "W_sv"
+        Li = "Li_sv"
+
+    A plain (no-suffix) potential is requested by setting the value
+    equal to the element symbol, e.g. ``C = "C"``.
+
+    The returned dict maps element symbols to ASE suffix strings
+    (``"_sv"``, ``""``, ...), which is what ASE's ``Vasp`` calculator
+    expects in its ``setups`` argument.
+    """
+    setups: dict[str, str] = {
+        'base': 'recommended',
+        # ASE bug: 'recommended' maps W to '_pv', while VASP recommends
+        # W_sv (see https://vasp.at/wiki/index.php/Available_pseudopotentials).
+        'W': '_sv',
+    }
+    toml = read_incar_toml(Path(path) / 'INCAR.toml')
+    potcar = toml.get('POTCAR')
+    if potcar is None:
+        return setups
+    if not isinstance(potcar, dict):
+        raise ValueError(
+            "INCAR.toml [POTCAR] section must be a table, "
+            f"got {type(potcar).__name__}"
+        )
+    for element, symbol in potcar.items():
+        element = str(element)
+        if not isinstance(symbol, str):
+            raise ValueError(
+                f"INCAR.toml [POTCAR] value for {element} must be a string, "
+                f"got {type(symbol).__name__}"
+            )
+        if symbol == element:
+            suffix = ''
+        elif symbol.startswith(element):
+            suffix = symbol[len(element):]
+            if not suffix.startswith('_'):
+                raise ValueError(
+                    f"INCAR.toml [POTCAR] value {symbol!r} for element "
+                    f"{element!r} is not a valid potential name"
+                )
+        else:
+            raise ValueError(
+                f"INCAR.toml [POTCAR] value {symbol!r} does not start with "
+                f"the element symbol {element!r}"
+            )
+        setups[element] = suffix
+    return setups
+
+
 def generate_potcar(path='.', keep_existing=False) -> None:
     """Generate POTCAR from POSCAR file in PATH.
     When KEEP_EXISTING is True and POTCAR already exists, do not
@@ -196,12 +260,7 @@ def generate_potcar(path='.', keep_existing=False) -> None:
         atoms = ase.io.vasp.read_vasp(poscar_path)
         calc_temp = Vasp(
             xc='PBE',
-            setups={
-            'base': 'recommended',
-            # ASE bug - dictionary not updated and
-            # W_sv is recommended on
-            # https://vasp.at/wiki/index.php/Available_pseudopotentials
-            'W': '_sv'})
+            setups=potcar_setups(path))
         calc_temp.initialize(atoms)
         size_before = 0
         prev_potcar = None
