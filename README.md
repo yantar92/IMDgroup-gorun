@@ -2,6 +2,9 @@
 
 # IMDgroup-gorun
 
+[!IMPORTANT]
+IMDgroup-gorun is no longer a standalone package. It is a part of MatRiFFlow: https://github.com/yantar92/MatRiFFlow/
+
 This package provides a set of scripts for supercomputer job
 submission for VASP, MACE multihead fine-tuning, and ATAT via
 [Slurm](https://slurm.schedmd.com/). It is tailored to research performed in the
@@ -132,7 +135,7 @@ and `--time-limit` specify the number of nodes and the time limit:
 
 -   **`--mark`:** Prepare the directory and create a `gorun_ready` marker
     file, but do not submit. Use `gorun-all-ready.sh` to submit
-    multiple marked directories later (see [5](#org915b15e)).
+    multiple marked directories later (see [5](#org7a2fabb)).
 
 -   **`--force`:** Skip convergence checks and run VASP even if the
     directory already contains converged output.
@@ -272,7 +275,7 @@ Both stages run sequentially in a single Slurm job.
 If a `RUNFILE.sh` or `RUNFILE.py` exists in the working directory, its
 content replaces the canned two-stage workflow.  `RUNFILE.sh` takes
 precedence over `RUNFILE.py`.  Both are wrapped so they inherit the
-cluster environment (see [3.2](#orga1db24e)).
+cluster environment (see [3.2](#org3a8987c)).
 
 Use this when the standard two-stage protocol does not fit your use
 case &ndash; for example, when you want to run `mace.cli.eval` or a custom

@@ -1,6 +1,12 @@
 # -*- after-save-hook: (org-md-export-to-markdown); -*-
 #+options: toc:nil
+
 * IMDgroup-gorun
+
+#+begin_export markdown
+[!IMPORTANT]
+IMDgroup-gorun is no longer a standalone package. It is a part of MatRiFFlow: https://github.com/yantar92/MatRiFFlow/
+#+end_export
 
 This package provides a set of scripts for supercomputer job
 submission for VASP, MACE multihead fine-tuning, and ATAT via
